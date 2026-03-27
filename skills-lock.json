@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    },
+    "hf-cli": {
+      "source": "huggingface/skills",
+      "sourceType": "github",
+      "computedHash": "a6b2e303e6a15ef21f3e041e622733a632c123f2a7ca2074e2a1f0d7a911dc36"
+    },
+    "reinforcement-learning": {
+      "source": "omer-metin/skills-for-antigravity",
+      "sourceType": "github",
+      "computedHash": "b2c8580ea8ae26f33b5cbb9a581778a7c9037b4e65d903f0458395ed006dc5da"
+    }
+  }
+}
