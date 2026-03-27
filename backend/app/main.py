@@ -8,7 +8,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import agents, episode, health, memory, tasks, tools
+from app.api.routes import agents, episode, health, memory, plugins, tasks, tools
+from app.api.routes import settings as settings_routes
 from app.config import get_settings
 from app.memory.manager import MemoryManager
 from app.models.router import SmartModelRouter
@@ -115,6 +116,8 @@ def create_app() -> FastAPI:
     app.include_router(agents.router, prefix=api_prefix, tags=["Agents"])
     app.include_router(tools.router, prefix=api_prefix, tags=["Tools"])
     app.include_router(memory.router, prefix=api_prefix, tags=["Memory"])
+    app.include_router(settings_routes.router, prefix=api_prefix, tags=["Settings"])
+    app.include_router(plugins.router, prefix=api_prefix, tags=["Plugins"])
 
     return app
 
