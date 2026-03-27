@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
@@ -12,12 +12,17 @@ from pydantic import BaseModel, Field
 T = TypeVar("T")
 
 
+def _utc_now() -> datetime:
+    """Return current UTC datetime."""
+    return datetime.now(timezone.utc)
+
+
 class MemoryEntry(BaseModel, Generic[T]):
     """A single memory entry with metadata."""
 
     key: str
     value: Any
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     access_count: int = 0
     tags: list[str] = Field(default_factory=list)
@@ -94,7 +99,7 @@ class ShortTermMemory:
             ValueError: If max_size would be exceeded for a new key.
         """
         async with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             if key in self._store:
                 entry = self._store[key]

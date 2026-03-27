@@ -1,6 +1,6 @@
 """Memory agent for memory operations and knowledge management."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.core.action import Action, ActionType
@@ -26,20 +26,20 @@ class MemoryEntry:
         self.memory_type = memory_type
         self.ttl_seconds = ttl_seconds
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow()
-        self.accessed_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
+        self.accessed_at = datetime.now(timezone.utc)
         self.access_count = 0
 
     def is_expired(self) -> bool:
         """Check if the memory entry has expired."""
         if self.ttl_seconds is None:
             return False
-        elapsed = (datetime.utcnow() - self.created_at).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.created_at).total_seconds()
         return elapsed > self.ttl_seconds
 
     def access(self) -> Any:
         """Access the memory and update metadata."""
-        self.accessed_at = datetime.utcnow()
+        self.accessed_at = datetime.now(timezone.utc)
         self.access_count += 1
         return self.value
 

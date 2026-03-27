@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+def _utc_now() -> datetime:
+    """Return current UTC datetime."""
+    return datetime.now(timezone.utc)
 
 
 class WorkingMemoryItem(BaseModel):
@@ -16,8 +21,8 @@ class WorkingMemoryItem(BaseModel):
     id: str
     content: Any
     priority: float = 0.0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_accessed: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
+    last_accessed: datetime = Field(default_factory=_utc_now)
     access_count: int = 0
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -86,7 +91,7 @@ class WorkingMemory:
                 self._counter += 1
                 item_id = f"wm_{self._counter}"
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Check if item already exists (update it)
             if item_id in self._items:
@@ -170,7 +175,7 @@ class WorkingMemory:
             # Get last item
             item_id = next(reversed(self._items))
             item = self._items[item_id]
-            item.last_accessed = datetime.utcnow()
+            item.last_accessed = datetime.now(timezone.utc)
             item.access_count += 1
             return item
 
@@ -187,7 +192,7 @@ class WorkingMemory:
         async with self._lock:
             item = self._items.get(item_id)
             if item:
-                item.last_accessed = datetime.utcnow()
+                item.last_accessed = datetime.now(timezone.utc)
                 item.access_count += 1
                 # Move to end (mark as recently accessed)
                 self._items.move_to_end(item_id)

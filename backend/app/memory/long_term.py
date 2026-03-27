@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -170,7 +170,7 @@ class LongTermMemory:
 
         async with self._lock:
             doc_id = document_id or self._generate_id(content)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             document = Document(
                 id=doc_id,

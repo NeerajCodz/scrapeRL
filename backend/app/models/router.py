@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -123,7 +123,7 @@ class CostTracker:
         self.cost_by_model = {}
         self.request_count = 0
         self.total_tokens = TokenUsage()
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
 
 
 class SmartModelRouter:
