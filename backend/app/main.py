@@ -2,11 +2,14 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import agents, episode, health, memory, plugins, tasks, tools
 from app.api.routes import settings as settings_routes
@@ -118,6 +121,37 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix=api_prefix, tags=["Memory"])
     app.include_router(settings_routes.router, prefix=api_prefix, tags=["Settings"])
     app.include_router(plugins.router, prefix=api_prefix, tags=["Plugins"])
+
+    # Serve static files (frontend build)
+    static_dir = Path(__file__).parent.parent / "static"
+    if static_dir.exists():
+        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+        
+        @app.get("/", response_class=HTMLResponse)
+        async def serve_spa():
+            """Serve the main SPA index.html."""
+            index_file = static_dir / "index.html"
+            if index_file.exists():
+                return FileResponse(index_file)
+            return HTMLResponse("<h1>ScrapeRL</h1><p>Frontend not built.</p>")
+        
+        @app.get("/{full_path:path}")
+        async def serve_spa_routes(request: Request, full_path: str):
+            """Serve SPA routes - return index.html for client-side routing."""
+            # Don't serve index.html for API routes
+            if full_path.startswith("api/"):
+                return {"detail": "Not Found"}
+            
+            # Check if it's a static file
+            static_file = static_dir / full_path
+            if static_file.exists() and static_file.is_file():
+                return FileResponse(static_file)
+            
+            # Return index.html for SPA routing
+            index_file = static_dir / "index.html"
+            if index_file.exists():
+                return FileResponse(index_file)
+            return HTMLResponse("<h1>ScrapeRL</h1><p>Frontend not built.</p>")
 
     return app
 

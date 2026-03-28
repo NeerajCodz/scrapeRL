@@ -3,16 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Settings as SettingsIcon,
   Key,
-  Wifi,
-  Database,
-  Image,
   AlertCircle,
   CheckCircle,
   Eye,
   EyeOff,
   Zap,
+  Server,
 } from 'lucide-react';
-import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, Toggle } from '@/components/ui/Select';
@@ -147,39 +144,51 @@ export const Settings: React.FC<SettingsProps> = ({ className }) => {
     : 'groq/gpt-oss-120b';
 
   return (
-    <Card className={className}>
-      <CardHeader
-        title="Settings"
-        icon={<SettingsIcon className="w-4 h-4" />}
-        action={
-          health && (
-            <Badge variant={health.status === 'ok' ? 'success' : 'error'} dot>
-              {health.status === 'ok' ? 'Connected' : 'Disconnected'}
-            </Badge>
-          )
-        }
-      />
-      <CardContent>
-        {settingsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <SettingsIcon className="w-6 h-6 text-dark-500 animate-spin" />
+    <div className={`space-y-6 ${className}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg">
+              <SettingsIcon className="w-6 h-6 text-purple-400" />
+            </div>
+            Settings
+          </h1>
+          <p className="text-gray-400 mt-1">Configure your ScrapeRL environment</p>
+        </div>
+        {health && (
+          <Badge variant={health.status === 'ok' ? 'success' : 'error'} dot>
+            {health.status === 'ok' ? 'Connected' : 'Disconnected'}
+          </Badge>
+        )}
+      </div>
+
+      {settingsLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="flex flex-col items-center gap-3">
+            <SettingsIcon className="w-8 h-8 text-gray-500 animate-spin" />
+            <p className="text-gray-400">Loading settings...</p>
           </div>
-        ) : (
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column */}
           <div className="space-y-6">
             {/* API Key Required Warning */}
             {keyRequired?.required && (
-              <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm text-yellow-400">
-                  {keyRequired.message}
-                </span>
+              <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-400">API Key Required</p>
+                  <p className="text-xs text-amber-400/70">{keyRequired.message}</p>
+                </div>
               </div>
             )}
 
             {/* Model Selection */}
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium text-dark-200 mb-3">
-                <Zap className="w-4 h-4" />
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white mb-4">
+                <Zap className="w-4 h-4 text-emerald-400" />
                 Active Model
               </div>
               <Select
@@ -190,86 +199,20 @@ export const Settings: React.FC<SettingsProps> = ({ className }) => {
                 placeholder="Select model"
               />
               {selectModelMutation.isPending && (
-                <p className="text-xs text-dark-400 mt-1">Switching model...</p>
+                <p className="text-xs text-gray-400 mt-2">Switching model...</p>
               )}
-            </div>
-
-            {/* API Keys Section */}
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium text-dark-200 mb-3">
-                <Key className="w-4 h-4" />
-                API Keys
-              </div>
-              <p className="text-xs text-dark-400 mb-4">
-                Enter your API keys to use the corresponding models. Keys are stored in your browser session.
+              <p className="text-xs text-gray-500 mt-3">
+                Select the AI model to use for scraping tasks. Different models have different capabilities and costs.
               </p>
-              <div className="space-y-4">
-                {providers.map((provider) => {
-                  const isConfigured = settingsData?.api_keys_configured?.[provider.id] ?? false;
-                  return (
-                    <div key={provider.id} className="p-3 bg-dark-800/50 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{provider.icon}</span>
-                          <div>
-                            <span className="text-sm font-medium text-dark-100">
-                              {provider.name}
-                            </span>
-                            <p className="text-xs text-dark-400">{provider.description}</p>
-                          </div>
-                        </div>
-                        <Badge variant={isConfigured ? 'success' : 'warning'} size="sm">
-                          {isConfigured ? 'Configured' : 'Not Set'}
-                        </Badge>
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="flex-1 relative">
-                          <Input
-                            type={showKeys[provider.id] ? 'text' : 'password'}
-                            placeholder={`Enter ${provider.name} API key...`}
-                            value={apiKeys[provider.id as keyof ApiKeyState]}
-                            onChange={(e) =>
-                              setApiKeys((prev) => ({
-                                ...prev,
-                                [provider.id]: e.target.value,
-                              }))
-                            }
-                            className="pr-10"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => toggleShowKey(provider.id)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-200"
-                          >
-                            {showKeys[provider.id] ? (
-                              <EyeOff className="w-4 h-4" />
-                            ) : (
-                              <Eye className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => handleSaveApiKey(provider.id)}
-                          disabled={!apiKeys[provider.id as keyof ApiKeyState]}
-                        >
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
 
             {/* Connection Settings */}
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium text-dark-200 mb-3">
-                <Wifi className="w-4 h-4" />
-                Connection
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white mb-4">
+                <Server className="w-4 h-4 text-cyan-400" />
+                Connection Settings
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <Toggle
                   label="WebSocket Updates"
                   description="Enable real-time episode updates"
@@ -278,16 +221,6 @@ export const Settings: React.FC<SettingsProps> = ({ className }) => {
                     setLocalSettings((prev) => ({ ...prev, enableWebSocket: checked }));
                   }}
                 />
-              </div>
-            </div>
-
-            {/* Storage Settings */}
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium text-dark-200 mb-3">
-                <Database className="w-4 h-4" />
-                Storage
-              </div>
-              <div className="space-y-3">
                 <Toggle
                   label="Memory Persistence"
                   description="Persist memory across episodes"
@@ -298,42 +231,88 @@ export const Settings: React.FC<SettingsProps> = ({ className }) => {
                 />
               </div>
             </div>
+          </div>
 
-            {/* Screenshot Settings */}
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium text-dark-200 mb-3">
-                <Image className="w-4 h-4" />
-                Screenshots
-              </div>
-              <div className="space-y-3">
-                <Input
-                  label="Screenshot Quality"
-                  type="range"
-                  min={10}
-                  max={100}
-                  value={localSettings.screenshotQuality ?? 80}
-                  onChange={(e) => {
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      screenshotQuality: parseInt(e.target.value),
-                    }));
-                  }}
-                  hint={`Quality: ${localSettings.screenshotQuality ?? 80}%`}
-                />
-              </div>
+          {/* Right Column - API Keys */}
+          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
+              <Key className="w-4 h-4 text-amber-400" />
+              API Keys
+            </div>
+            <p className="text-xs text-gray-400 mb-5">
+              Configure your API keys. Server keys are used by default, but you can override them here.
+            </p>
+            
+            <div className="space-y-4">
+              {providers.map((provider) => {
+                const isConfigured = settingsData?.api_keys_configured?.[provider.id] ?? false;
+                return (
+                  <div key={provider.id} className="p-4 bg-gray-900/50 border border-gray-700/30 rounded-xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{provider.icon}</span>
+                        <div>
+                          <span className="text-sm font-medium text-white">
+                            {provider.name}
+                          </span>
+                          <p className="text-xs text-gray-500">{provider.description}</p>
+                        </div>
+                      </div>
+                      <Badge variant={isConfigured ? 'success' : 'warning'} size="sm">
+                        {isConfigured ? 'Active' : 'Not Set'}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <Input
+                          type={showKeys[provider.id] ? 'text' : 'password'}
+                          placeholder={`Enter ${provider.name} API key...`}
+                          value={apiKeys[provider.id as keyof ApiKeyState]}
+                          onChange={(e) =>
+                            setApiKeys((prev) => ({
+                              ...prev,
+                              [provider.id]: e.target.value,
+                            }))
+                          }
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => toggleShowKey(provider.id)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                        >
+                          {showKeys[provider.id] ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleSaveApiKey(provider.id)}
+                        disabled={!apiKeys[provider.id as keyof ApiKeyState]}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Status Messages */}
             {updateApiKeyMutation.isSuccess && (
-              <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span className="text-sm text-green-400">API key saved successfully</span>
+              <div className="flex items-center gap-2 mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm text-emerald-400">API key saved successfully</span>
               </div>
             )}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 };
 

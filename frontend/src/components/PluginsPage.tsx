@@ -13,10 +13,8 @@ import {
   Cpu,
   Wrench,
   Database,
+  Sparkles,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { classNames } from '@/utils/helpers';
 
@@ -29,13 +27,6 @@ interface Plugin {
   size: string;
   installed: boolean;
   requires_key: boolean;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
 }
 
 interface PluginsResponse {
@@ -55,15 +46,15 @@ interface PluginsPageProps {
 const getCategoryIcon = (category: string) => {
   switch (category) {
     case 'apis':
-      return <Plug className="w-5 h-5" />;
+      return <Plug className="w-5 h-5 text-cyan-400" />;
     case 'mcps':
-      return <Wrench className="w-5 h-5" />;
+      return <Wrench className="w-5 h-5 text-amber-400" />;
     case 'skills':
-      return <Cpu className="w-5 h-5" />;
+      return <Cpu className="w-5 h-5 text-purple-400" />;
     case 'processors':
-      return <Database className="w-5 h-5" />;
+      return <Database className="w-5 h-5 text-pink-400" />;
     default:
-      return <Package className="w-5 h-5" />;
+      return <Package className="w-5 h-5 text-gray-400" />;
   }
 };
 
@@ -71,10 +62,20 @@ const getCategoryLabel = (category: string) => {
   const labels: Record<string, string> = {
     apis: 'API Providers',
     mcps: 'MCP Tools',
-    skills: 'Skills/Agents',
+    skills: 'Skills & Agents',
     processors: 'Data Processors',
   };
   return labels[category] || category;
+};
+
+const getCategoryColor = (category: string) => {
+  const colors: Record<string, string> = {
+    apis: 'from-cyan-500/20 to-blue-500/10 border-cyan-500/30',
+    mcps: 'from-amber-500/20 to-orange-500/10 border-amber-500/30',
+    skills: 'from-purple-500/20 to-pink-500/10 border-purple-500/30',
+    processors: 'from-pink-500/20 to-rose-500/10 border-pink-500/30',
+  };
+  return colors[category] || 'from-gray-500/20 to-gray-500/10 border-gray-500/30';
 };
 
 export const PluginsPage: React.FC<PluginsPageProps> = ({ className }) => {
@@ -88,15 +89,6 @@ export const PluginsPage: React.FC<PluginsPageProps> = ({ className }) => {
     queryKey: ['plugins'],
     queryFn: async () => {
       const res = await fetch('/api/plugins/');
-      return res.json();
-    },
-  });
-
-  // Fetch categories
-  const { data: categoriesData } = useQuery<{ categories: Category[] }>({
-    queryKey: ['plugin-categories'],
-    queryFn: async () => {
-      const res = await fetch('/api/plugins/categories');
       return res.json();
     },
   });
@@ -168,92 +160,122 @@ export const PluginsPage: React.FC<PluginsPageProps> = ({ className }) => {
   return (
     <div className={classNames('space-y-6', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-dark-100">Plugins</h1>
-          <p className="text-dark-400 mt-1">
+          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-lg">
+              <Package className="w-6 h-6 text-cyan-400" />
+            </div>
+            Plugins
+          </h1>
+          <p className="text-gray-400 mt-1">
             Extend ScrapeRL with APIs, tools, skills, and processors
           </p>
         </div>
+        
+        {/* Stats */}
         {pluginsData?.stats && (
-          <div className="flex gap-4 text-sm">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary-400">
+          <div className="flex gap-4">
+            <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center">
+              <div className="text-xl font-bold text-emerald-400">
                 {pluginsData.stats.installed}
               </div>
-              <div className="text-dark-400">Installed</div>
+              <div className="text-xs text-emerald-400/70">Installed</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-dark-300">
+            <div className="px-4 py-2 bg-gray-700/30 border border-gray-600/30 rounded-xl text-center">
+              <div className="text-xl font-bold text-gray-300">
                 {pluginsData.stats.available}
               </div>
-              <div className="text-dark-400">Available</div>
+              <div className="text-xs text-gray-500">Available</div>
+            </div>
+            <div className="px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-xl text-center">
+              <div className="text-xl font-bold text-purple-400">
+                {pluginsData.stats.total}
+              </div>
+              <div className="text-xs text-purple-400/70">Total</div>
             </div>
           </div>
         )}
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex flex-wrap gap-4 items-center">
-            {/* Search */}
-            <div className="flex-1 min-w-[200px]">
-              <Input
+      <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          {/* Search */}
+          <div className="flex-1 min-w-[200px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
                 placeholder="Search plugins..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                leftIcon={<Search className="w-4 h-4" />}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-900/50 border border-gray-700/50 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
               />
             </div>
-
-            {/* Category Filter */}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={selectedCategory === null ? 'primary' : 'ghost'}
-                onClick={() => setSelectedCategory(null)}
-              >
-                All
-              </Button>
-              {categoriesData?.categories.map((cat) => (
-                <Button
-                  key={cat.id}
-                  size="sm"
-                  variant={selectedCategory === cat.id ? 'primary' : 'ghost'}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  leftIcon={<span>{cat.icon}</span>}
-                >
-                  {cat.name}
-                </Button>
-              ))}
-            </div>
-
-            {/* Show Installed Toggle */}
-            <Button
-              size="sm"
-              variant={showInstalled ? 'primary' : 'ghost'}
-              onClick={() => setShowInstalled(!showInstalled)}
-              leftIcon={<Filter className="w-4 h-4" />}
-            >
-              Installed Only
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Category Filter */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={classNames(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                selectedCategory === null
+                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                  : 'bg-gray-700/50 text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+              )}
+            >
+              All
+            </button>
+            {['apis', 'mcps', 'skills', 'processors'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={classNames(
+                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                  selectedCategory === cat
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                    : 'bg-gray-700/50 text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                )}
+              >
+                {getCategoryIcon(cat)}
+                {getCategoryLabel(cat)}
+              </button>
+            ))}
+          </div>
+
+          {/* Show Installed Toggle */}
+          <button
+            onClick={() => setShowInstalled(!showInstalled)}
+            className={classNames(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+              showInstalled
+                ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
+                : 'bg-gray-700/50 text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+            )}
+          >
+            <Filter className="w-4 h-4" />
+            Installed Only
+          </button>
+        </div>
+      </div>
 
       {/* Plugin List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 text-primary-400 animate-spin" />
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="w-10 h-10 text-cyan-400 animate-spin mb-4" />
+          <p className="text-gray-400">Loading plugins...</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {Object.entries(filteredPlugins).map(([category, plugins]) => (
             <div key={category}>
-              <div className="flex items-center gap-2 mb-4">
-                {getCategoryIcon(category)}
-                <h2 className="text-lg font-semibold text-dark-100">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`p-2 rounded-lg bg-gradient-to-br ${getCategoryColor(category)}`}>
+                  {getCategoryIcon(category)}
+                </div>
+                <h2 className="text-lg font-semibold text-white">
                   {getCategoryLabel(category)}
                 </h2>
                 <Badge variant="neutral" size="sm">
@@ -263,74 +285,72 @@ export const PluginsPage: React.FC<PluginsPageProps> = ({ className }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {plugins.map((plugin) => (
-                  <Card key={plugin.id} className="relative">
-                    <CardContent className="py-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-dark-100">
-                              {plugin.name}
-                            </h3>
-                            {plugin.installed && (
-                              <CheckCircle className="w-4 h-4 text-green-400" />
-                            )}
-                          </div>
-                          <p className="text-sm text-dark-400 mt-1">
-                            {plugin.description}
-                          </p>
-                          <div className="flex items-center gap-3 mt-3 text-xs text-dark-500">
-                            <span>v{plugin.version}</span>
-                            <span>•</span>
-                            <span>{plugin.size}</span>
-                            {plugin.requires_key && (
-                              <>
-                                <span>•</span>
-                                <span className="text-yellow-400">
-                                  Requires API Key
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 mt-4">
-                        {plugin.installed ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="flex-1 text-red-400 hover:text-red-300"
-                            onClick={() => uninstallMutation.mutate(plugin.id)}
-                            disabled={uninstallMutation.isPending}
-                            leftIcon={<Trash2 className="w-4 h-4" />}
-                          >
-                            Uninstall
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            className="flex-1"
-                            onClick={() => installMutation.mutate(plugin.id)}
-                            disabled={installMutation.isPending}
-                            leftIcon={<Download className="w-4 h-4" />}
-                          >
-                            Install
-                          </Button>
+                  <div
+                    key={plugin.id}
+                    className={`relative bg-gradient-to-br ${getCategoryColor(category)} border rounded-xl p-5 backdrop-blur-sm transition-all hover:scale-[1.02] hover:shadow-xl`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-white">{plugin.name}</h3>
+                        {plugin.installed && (
+                          <CheckCircle className="w-4 h-4 text-emerald-400" />
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
+                      <Badge 
+                        variant={plugin.installed ? 'success' : 'neutral'} 
+                        size="sm"
+                      >
+                        {plugin.installed ? 'Installed' : 'Available'}
+                      </Badge>
+                    </div>
+                    
+                    <p className="text-sm text-gray-400 mb-4 line-clamp-2">
+                      {plugin.description}
+                    </p>
+                    
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-4">
+                      <span className="px-2 py-0.5 bg-gray-800/50 rounded">v{plugin.version}</span>
+                      <span>{plugin.size}</span>
+                      {plugin.requires_key && (
+                        <span className="flex items-center gap-1 text-amber-400">
+                          <Sparkles className="w-3 h-3" />
+                          API Key
+                        </span>
+                      )}
+                    </div>
+
+                    {plugin.installed ? (
+                      <button
+                        onClick={() => uninstallMutation.mutate(plugin.id)}
+                        disabled={uninstallMutation.isPending}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg font-medium transition-all disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Uninstall
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => installMutation.mutate(plugin.id)}
+                        disabled={installMutation.isPending}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4" />
+                        Install
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
           ))}
 
           {Object.keys(filteredPlugins).length === 0 && (
-            <div className="text-center py-12">
-              <Package className="w-12 h-12 text-dark-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-dark-300">No plugins found</h3>
-              <p className="text-dark-400 mt-1">
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Package className="w-8 h-8 text-gray-500" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-300">No plugins found</h3>
+              <p className="text-gray-500 mt-1">
                 Try adjusting your search or filter criteria
               </p>
             </div>
@@ -340,7 +360,7 @@ export const PluginsPage: React.FC<PluginsPageProps> = ({ className }) => {
 
       {/* Error Messages */}
       {uninstallMutation.isError && (
-        <div className="fixed bottom-4 right-4 flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+        <div className="fixed bottom-4 right-4 flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl backdrop-blur-sm shadow-xl">
           <AlertCircle className="w-5 h-5 text-red-400" />
           <span className="text-sm text-red-400">
             {(uninstallMutation.error as Error).message}
