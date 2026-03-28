@@ -260,6 +260,10 @@ class SmartModelRouter:
         self.providers.clear()
         self._initialized = False
 
+    def list_providers(self) -> list[str]:
+        """Get list of initialized provider names."""
+        return list(self.providers.keys())
+
     def get_available_models(self) -> list[ModelInfo]:
         """Get all available models across providers."""
         models = []

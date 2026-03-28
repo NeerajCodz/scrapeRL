@@ -105,6 +105,46 @@ class AgentState(BaseModel):
 _agent_states: dict[str, AgentState] = {}
 
 
+@router.get(
+    "/list",
+    status_code=status.HTTP_200_OK,
+    summary="List all agents",
+    description="Get list of all available agents and their status",
+)
+async def list_agents() -> dict[str, Any]:
+    """
+    List all available agents and their current states.
+
+    Returns:
+        Dictionary with agent types and their states.
+    """
+    agent_types = [
+        {
+            "type": at.value,
+            "name": at.name.title(),
+            "description": f"{at.name.title()} agent for web scraping tasks",
+        }
+        for at in AgentType
+    ]
+
+    active_agents = [
+        {
+            "agent_id": agent_id,
+            "type": state.agent_type,
+            "status": state.status,
+            "episode_id": state.episode_id,
+        }
+        for agent_id, state in _agent_states.items()
+    ]
+
+    return {
+        "agent_types": agent_types,
+        "active_agents": active_agents,
+        "total_types": len(AgentType),
+        "active_count": len(_agent_states),
+    }
+
+
 @router.post(
     "/run",
     response_model=AgentRunResponse,
