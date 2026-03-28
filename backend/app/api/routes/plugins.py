@@ -268,6 +268,7 @@ class PluginResponse(BaseModel):
     requires_key: bool
 
 
+@router.get("")
 @router.get("/")
 async def list_plugins(category: str | None = None) -> dict[str, Any]:
     """List all available plugins, optionally filtered by category."""
