@@ -176,6 +176,15 @@ curl http://localhost:7860/api/plugins
 4. **Memory API**: Full CRUD operations tested
 5. **Tasks API**: List, filter, create, and get operations tested
 
+## Manual Testing
+
+See [MANUAL_TEST_REPORT.md](./MANUAL_TEST_REPORT.md) for comprehensive manual testing results.
+
+**Manual Test Summary:**
+- Total Tests: 89
+- Passed: 89 (100%)
+- Failed: 0
+
 ## Recommendations
 
 1. Add mocking for LLM providers to increase agent coverage
