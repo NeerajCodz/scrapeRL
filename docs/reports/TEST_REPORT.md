@@ -4,8 +4,8 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Tests** | 53 |
-| **Passed** | 53 |
+| **Total Tests** | 57 |
+| **Passed** | 57 |
 | **Failed** | 0 |
 | **Coverage** | 42% |
 | **Test Framework** | pytest 9.0.2 |
@@ -13,7 +13,7 @@
 
 ## Test Categories
 
-### API Tests (41 tests)
+### API Tests (45 tests)
 
 | Category | Tests | Status |
 |----------|-------|--------|
