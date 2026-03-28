@@ -200,6 +200,8 @@ export interface SystemSettings {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   screenshotQuality: number;
   memoryPersistence: boolean;
+  autoSave: boolean;
+  debugMode: boolean;
 }
 
 export interface WebSocketMessage {
