@@ -108,6 +108,7 @@ AVAILABLE_MODELS = [
 ]
 
 
+@router.get("")
 @router.get("/", response_model=SettingsResponse)
 async def get_settings() -> SettingsResponse:
     """Get current client settings."""
