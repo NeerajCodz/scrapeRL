@@ -205,10 +205,24 @@ export interface SystemSettings {
 }
 
 export interface WebSocketMessage {
-  type: 'observation' | 'action' | 'reward' | 'agent_update' | 'episode_status' | 'error';
-  payload: unknown;
-  timestamp: string;
-  episodeId?: string;
+  type: 'connected' | 'ping' | 'pong' | 'progress' | 'error' | 'completion';
+  episode_id?: string;
+  message?: string;
+  // Progress update fields
+  step?: number;
+  action_type?: string;
+  reward?: number;
+  progress?: number;
+  // Error fields
+  error?: string;
+  details?: Record<string, unknown>;
+  // Completion fields
+  success?: boolean;
+  total_reward?: number;
+  extracted_data?: Record<string, unknown>;
+  // Metadata
+  timestamp?: number;
+  payload?: unknown;
 }
 
 export interface APIResponse<T> {
