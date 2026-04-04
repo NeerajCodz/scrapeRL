@@ -237,6 +237,7 @@ PLUGIN_REGISTRY = {
 _installed_plugins: set[str] = {
     "google-api",
     "groq-api",
+    "nvidia-api",
     "mcp-browser",
     "mcp-search",
     "mcp-html",
