@@ -137,6 +137,10 @@ def create_app() -> FastAPI:
     # Import and include providers router
     from app.api.routes import providers
     app.include_router(providers.router, prefix=api_prefix, tags=["Providers"])
+    
+    # Import and include WebSocket router
+    from app.api.routes import websocket
+    app.include_router(websocket.router, tags=["WebSocket"])
 
     # Serve static files (frontend build)
     static_dir = Path(__file__).parent.parent / "static"

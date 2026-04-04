@@ -136,15 +136,36 @@ async def step_episode(request: StepRequest) -> StepResponse:
     logger.info(f"Step in episode {request.episode_id}: {request.action.action_type}")
 
     env = get_environment(request.episode_id)
+    
+    # Get WebSocket manager for real-time updates
+    from app.api.routes.websocket import get_connection_manager
+    ws_manager = get_connection_manager()
 
     try:
         observation, reward, reward_breakdown, terminated, truncated, info = await env.step(
             request.action
         )
+        
+        # Send real-time progress update via WebSocket
+        await ws_manager.send_progress_update(
+            episode_id=request.episode_id,
+            step=observation.step_number,
+            action_type=request.action.action_type.value,
+            reward=reward,
+            progress=observation.extraction_progress,
+            message=f"Executed {request.action.action_type.value}",
+        )
 
         # Clean up if episode is done
         if terminated or truncated:
             logger.info(f"Episode {request.episode_id} completed")
+            state = env.get_state()
+            await ws_manager.send_completion(
+                episode_id=request.episode_id,
+                success=terminated and not truncated,
+                total_reward=state.get("total_reward", 0.0),
+                extracted_data=state.get("extracted_data", {}),
+            )
 
         return StepResponse(
             observation=observation,
@@ -156,6 +177,11 @@ async def step_episode(request: StepRequest) -> StepResponse:
         )
     except Exception as e:
         logger.error(f"Step failed: {e}")
+        await ws_manager.send_error(
+            episode_id=request.episode_id,
+            error=str(e),
+            details={"action_type": request.action.action_type.value},
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Step execution failed: {str(e)}",
