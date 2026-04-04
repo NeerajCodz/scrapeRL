@@ -22,6 +22,7 @@ from app.models.providers.openai import OpenAIProvider
 from app.models.providers.anthropic import AnthropicProvider
 from app.models.providers.google import GoogleProvider
 from app.models.providers.groq import GroqProvider
+from app.models.providers.nvidia import NVIDIAProvider
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +61,14 @@ class RoutingConfig:
 
     # Task-specific model preferences
     task_preferences: dict[TaskType, list[str]] = field(default_factory=lambda: {
-        TaskType.GENERAL: ["gpt-4o", "claude-3-5-sonnet-20241022", "gemini-1.5-pro"],
-        TaskType.CODE: ["claude-3-5-sonnet-20241022", "gpt-4o", "gemini-1.5-pro"],
-        TaskType.REASONING: ["claude-3-opus-20240229", "gpt-4o", "gemini-1.5-pro"],
-        TaskType.EXTRACTION: ["gpt-4o-mini", "claude-3-haiku-20240307", "gemini-1.5-flash"],
-        TaskType.SUMMARIZATION: ["gpt-4o-mini", "claude-3-5-haiku-20241022", "gemini-1.5-flash"],
+        TaskType.GENERAL: ["gpt-4o", "claude-3-5-sonnet-20241022", "gemini-2.5-pro", "deepseek-r1"],
+        TaskType.CODE: ["claude-3-5-sonnet-20241022", "gpt-4o", "devstral-2-123b", "gemini-2.5-pro"],
+        TaskType.REASONING: ["claude-3-opus-20240229", "deepseek-r1", "gpt-4o", "step-3.5-flash"],
+        TaskType.EXTRACTION: ["gpt-4o-mini", "claude-3-haiku-20240307", "gemini-2.5-flash"],
+        TaskType.SUMMARIZATION: ["gpt-4o-mini", "claude-3-5-haiku-20241022", "gemini-2.5-flash"],
         TaskType.CLASSIFICATION: ["gpt-4o-mini", "claude-3-haiku-20240307", "llama-3.1-8b-instant"],
-        TaskType.CREATIVE: ["claude-3-5-sonnet-20241022", "gpt-4o", "gemini-1.5-pro"],
-        TaskType.FAST: ["llama-3.1-8b-instant", "gemini-1.5-flash", "gpt-4o-mini"],
+        TaskType.CREATIVE: ["claude-3-5-sonnet-20241022", "gpt-4o", "gemini-2.5-pro"],
+        TaskType.FAST: ["llama-3.1-8b-instant", "gemini-2.5-flash", "gpt-4o-mini"],
     })
 
 
@@ -143,19 +144,35 @@ class SmartModelRouter:
         "claude-3-sonnet-20240229": 0.88,
         "claude-3-5-haiku-20241022": 0.82,
         "claude-3-haiku-20240307": 0.75,
-        # Google
+        # Google Gemini 2.5 & 3.0
+        "gemini-2.5-pro": 0.93,
+        "gemini-2.5-flash": 0.85,
+        "gemini-3-flash-preview": 0.87,
+        "gemini-3.1-flash-lite-preview": 0.82,
+        # Google Gemini 2.0
+        "gemini-2.0-flash": 0.88,
+        "gemini-2.0-flash-lite": 0.80,
+        # Google Gemini 1.5
         "gemini-1.5-pro": 0.91,
-        "gemini-2.0-flash-exp": 0.88,
         "gemini-1.5-flash": 0.78,
         "gemini-pro": 0.75,
         # Groq
         "llama-3.3-70b-versatile": 0.85,
+        "llama-3.2-90b-vision-preview": 0.84,
         "llama-3.1-70b-versatile": 0.84,
         "llama3-70b-8192": 0.82,
         "mixtral-8x7b-32768": 0.78,
         "llama-3.1-8b-instant": 0.65,
         "llama3-8b-8192": 0.60,
         "gemma2-9b-it": 0.62,
+        # NVIDIA
+        "deepseek-r1": 0.92,
+        "deepseek-v3.2": 0.90,
+        "step-3.5-flash": 0.88,
+        "glm4.7": 0.87,
+        "devstral-2-123b": 0.86,
+        "llama-3.3-70b": 0.85,
+        "nemotron-70b": 0.83,
     }
 
     # Model speed rankings (relative, based on typical latency)
@@ -168,9 +185,22 @@ class SmartModelRouter:
         "llama3-70b-8192": 0.92,
         "llama-3.1-70b-versatile": 0.91,
         "llama-3.3-70b-versatile": 0.90,
-        # Google Flash is fast
+        "llama-3.2-90b-vision-preview": 0.89,
+        # Google Flash models
+        "gemini-2.5-flash": 0.90,
+        "gemini-3-flash-preview": 0.89,
+        "gemini-2.0-flash": 0.88,
         "gemini-1.5-flash": 0.88,
-        "gemini-2.0-flash-exp": 0.87,
+        "gemini-2.0-flash-lite": 0.87,
+        "gemini-3.1-flash-lite-preview": 0.86,
+        # NVIDIA models
+        "step-3.5-flash": 0.85,
+        "devstral-2-123b": 0.84,
+        "llama-3.3-70b": 0.83,
+        "nemotron-70b": 0.82,
+        "glm4.7": 0.81,
+        "deepseek-v3.2": 0.80,
+        "deepseek-r1": 0.79,
         # Mini models
         "gpt-4o-mini": 0.85,
         "claude-3-haiku-20240307": 0.84,
@@ -178,6 +208,7 @@ class SmartModelRouter:
         "gpt-3.5-turbo": 0.82,
         # Pro models
         "gemini-pro": 0.75,
+        "gemini-2.5-pro": 0.72,
         "gemini-1.5-pro": 0.70,
         "gpt-4o": 0.68,
         "claude-3-5-sonnet-20241022": 0.65,
@@ -193,6 +224,7 @@ class SmartModelRouter:
         anthropic_api_key: str | SecretStr | None = None,
         google_api_key: str | SecretStr | None = None,
         groq_api_key: str | SecretStr | None = None,
+        nvidia_api_key: str | SecretStr | None = None,
         config: RoutingConfig | None = None,
     ):
         self.config = config or RoutingConfig()
@@ -207,6 +239,7 @@ class SmartModelRouter:
             "anthropic": self._get_key_value(anthropic_api_key),
             "google": self._get_key_value(google_api_key),
             "groq": self._get_key_value(groq_api_key),
+            "nvidia": self._get_key_value(nvidia_api_key),
         }
 
     @staticmethod
@@ -247,6 +280,12 @@ class SmartModelRouter:
             await provider.initialize()
             self.providers["groq"] = provider
             logger.info("Initialized Groq provider")
+
+        if self._api_keys["nvidia"]:
+            provider = NVIDIAProvider(api_key=self._api_keys["nvidia"])
+            await provider.initialize()
+            self.providers["nvidia"] = provider
+            logger.info("Initialized NVIDIA provider")
 
         if not self.providers:
             logger.warning("No LLM providers configured")

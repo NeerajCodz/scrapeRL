@@ -62,7 +62,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await _memory_manager.initialize()
 
     logger.info("Initializing model router...")
-    _model_router = SmartModelRouter(settings)
+    _model_router = SmartModelRouter(
+        openai_api_key=settings.openai_api_key,
+        anthropic_api_key=settings.anthropic_api_key,
+        google_api_key=settings.google_api_key,
+        groq_api_key=settings.groq_api_key,
+        nvidia_api_key=settings.nvidia_api_key,
+    )
     await _model_router.initialize()
 
     logger.info("Initializing tool registry...")
