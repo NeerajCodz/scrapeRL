@@ -26,6 +26,82 @@ class GoogleProvider(BaseProvider):
 
     # Model definitions with pricing (per 1K tokens)
     MODELS = {
+        # Gemini 2.5 Series
+        "gemini-2.5-pro": ModelInfo(
+            id="gemini-2.5-pro",
+            name="Gemini 2.5 Pro",
+            provider="google",
+            context_window=2097152,
+            max_output_tokens=8192,
+            supports_functions=True,
+            supports_vision=True,
+            supports_streaming=True,
+            cost_per_1k_input=0.00125,
+            cost_per_1k_output=0.005,
+        ),
+        "gemini-2.5-flash": ModelInfo(
+            id="gemini-2.5-flash",
+            name="Gemini 2.5 Flash",
+            provider="google",
+            context_window=1048576,
+            max_output_tokens=8192,
+            supports_functions=True,
+            supports_vision=True,
+            supports_streaming=True,
+            cost_per_1k_input=0.000075,
+            cost_per_1k_output=0.0003,
+        ),
+        # Gemini 2.0 Series
+        "gemini-2.0-flash": ModelInfo(
+            id="gemini-2.0-flash",
+            name="Gemini 2.0 Flash",
+            provider="google",
+            context_window=1048576,
+            max_output_tokens=8192,
+            supports_functions=True,
+            supports_vision=True,
+            supports_streaming=True,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
+        ),
+        "gemini-2.0-flash-lite": ModelInfo(
+            id="gemini-2.0-flash-lite",
+            name="Gemini 2.0 Flash Lite",
+            provider="google",
+            context_window=524288,
+            max_output_tokens=8192,
+            supports_functions=True,
+            supports_vision=True,
+            supports_streaming=True,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
+        ),
+        # Gemini 3.0 Series (Preview)
+        "gemini-3-flash-preview": ModelInfo(
+            id="gemini-3-flash-preview",
+            name="Gemini 3 Flash Preview",
+            provider="google",
+            context_window=1048576,
+            max_output_tokens=8192,
+            supports_functions=True,
+            supports_vision=True,
+            supports_streaming=True,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
+        ),
+        "gemini-3.1-flash-lite-preview": ModelInfo(
+            id="gemini-3.1-flash-lite-preview",
+            name="Gemini 3.1 Flash Lite Preview",
+            provider="google",
+            context_window=524288,
+            max_output_tokens=8192,
+            supports_functions=True,
+            supports_vision=True,
+            supports_streaming=True,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
+        ),
+        # Gemini 1.5 Series (Stable)
         "gemini-1.5-pro": ModelInfo(
             id="gemini-1.5-pro",
             name="Gemini 1.5 Pro",
@@ -50,18 +126,6 @@ class GoogleProvider(BaseProvider):
             cost_per_1k_input=0.000075,
             cost_per_1k_output=0.0003,
         ),
-        "gemini-2.0-flash-exp": ModelInfo(
-            id="gemini-2.0-flash-exp",
-            name="Gemini 2.0 Flash (Experimental)",
-            provider="google",
-            context_window=1048576,
-            max_output_tokens=8192,
-            supports_functions=True,
-            supports_vision=True,
-            supports_streaming=True,
-            cost_per_1k_input=0.0,
-            cost_per_1k_output=0.0,
-        ),
         "gemini-pro": ModelInfo(
             id="gemini-pro",
             name="Gemini Pro",
@@ -78,7 +142,8 @@ class GoogleProvider(BaseProvider):
 
     # Aliases
     MODEL_ALIASES = {
-        "gemini-flash": "gemini-1.5-flash",
+        "gemini-flash": "gemini-2.5-flash",
+        "gemini-pro-latest": "gemini-2.5-pro",
         "gemini-1.5": "gemini-1.5-pro",
     }
 
