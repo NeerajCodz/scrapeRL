@@ -4,11 +4,13 @@
 
 @layer base {
   * {
-    @apply border-dark-700;
+    @apply border-navy-700;
   }
 
   body {
-    @apply bg-dark-900 text-dark-100 antialiased;
+    @apply bg-navy-950 text-gray-100 antialiased;
+    background: linear-gradient(135deg, #0a192f 0%, #020d14 100%);
+    min-height: 100vh;
   }
 
   ::-webkit-scrollbar {
@@ -16,47 +18,45 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-dark-800;
+    @apply bg-navy-900;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-dark-600 rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-dark-500;
+    @apply bg-cyan-700 rounded-full hover:bg-cyan-600;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-dark-800 border border-dark-700 rounded-xl p-4 shadow-lg;
+    @apply bg-navy-900/80 backdrop-blur-sm border border-cyan-900/30 rounded-xl p-4 shadow-lg;
+    box-shadow: 0 4px 20px rgba(0, 217, 255, 0.1);
   }
 
   .card-header {
-    @apply flex items-center justify-between mb-4 pb-3 border-b border-dark-700;
+    @apply flex items-center justify-between mb-4 pb-3 border-b border-cyan-900/30;
   }
 
   .card-title {
-    @apply text-lg font-semibold text-dark-100;
+    @apply text-lg font-semibold text-cyan-400;
   }
 
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium 
            rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 
-           focus:ring-accent-primary/50 disabled:opacity-50 disabled:cursor-not-allowed;
+           focus:ring-cyan-500/50 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-primary {
-    @apply bg-accent-primary text-white hover:bg-accent-secondary active:bg-accent-tertiary;
+    @apply bg-gradient-to-r from-cyan-600 to-cyan-500 text-white hover:from-cyan-500 hover:to-cyan-400 
+           active:from-cyan-700 active:to-cyan-600 shadow-lg shadow-cyan-500/30;
   }
 
   .btn-secondary {
-    @apply bg-dark-700 text-dark-200 hover:bg-dark-600 active:bg-dark-500;
+    @apply bg-navy-800 text-cyan-300 hover:bg-navy-700 active:bg-navy-600 border border-cyan-900/50;
   }
 
   .btn-ghost {
-    @apply bg-transparent text-dark-300 hover:bg-dark-700 hover:text-dark-100;
+    @apply bg-transparent text-cyan-400 hover:bg-navy-800 hover:text-cyan-300;
   }
 
   .btn-danger {
@@ -64,15 +64,15 @@
   }
 
   .input {
-    @apply w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-dark-100
-           placeholder-dark-500 focus:outline-none focus:border-accent-primary focus:ring-1 
-           focus:ring-accent-primary/50 transition-colors;
+    @apply w-full px-3 py-2 bg-navy-900 border border-cyan-900/50 rounded-lg text-gray-100
+           placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 
+           focus:ring-cyan-500/50 transition-colors;
   }
 
   .select {
-    @apply w-full px-3 py-2 bg-dark-900 border border-dark-600 rounded-lg text-dark-100
-           focus:outline-none focus:border-accent-primary focus:ring-1 
-           focus:ring-accent-primary/50 transition-colors cursor-pointer;
+    @apply w-full px-3 py-2 bg-navy-900 border border-cyan-900/50 rounded-lg text-gray-100
+           focus:outline-none focus:border-cyan-500 focus:ring-1 
+           focus:ring-cyan-500/50 transition-colors cursor-pointer;
   }
 
   .badge {
@@ -80,7 +80,7 @@
   }
 
   .badge-success {
-    @apply bg-green-500/20 text-green-400 border border-green-500/30;
+    @apply bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
   }
 
   .badge-warning {
@@ -92,24 +92,24 @@
   }
 
   .badge-info {
-    @apply bg-blue-500/20 text-blue-400 border border-blue-500/30;
+    @apply bg-cyan-500/20 text-cyan-400 border border-cyan-500/30;
   }
 
   .badge-neutral {
-    @apply bg-dark-600/50 text-dark-300 border border-dark-500/30;
+    @apply bg-navy-800/50 text-gray-400 border border-navy-700/30;
   }
 
   .tab {
-    @apply px-4 py-2 text-sm font-medium text-dark-400 hover:text-dark-200 
+    @apply px-4 py-2 text-sm font-medium text-gray-500 hover:text-cyan-400 
            border-b-2 border-transparent transition-colors;
   }
 
   .tab-active {
-    @apply text-accent-primary border-accent-primary;
+    @apply text-cyan-400 border-cyan-500;
   }
 
   .panel {
-    @apply bg-dark-850 rounded-lg p-3;
+    @apply bg-navy-900/50 rounded-lg p-3 border border-cyan-900/20;
   }
 
   .status-indicator {
@@ -117,7 +117,7 @@
   }
 
   .status-active {
-    @apply bg-green-500 animate-pulse;
+    @apply bg-cyan-400 animate-pulse shadow-lg shadow-cyan-500/50;
   }
 
   .status-idle {
@@ -129,35 +129,44 @@
   }
 
   .status-offline {
-    @apply bg-dark-500;
+    @apply bg-gray-600;
   }
 
   .thought-bubble {
-    @apply bg-dark-700/50 border border-dark-600 rounded-lg p-3 text-sm text-dark-300
+    @apply bg-navy-800/50 border border-cyan-900/30 rounded-lg p-3 text-sm text-gray-400
            font-mono italic;
   }
 
   .code-block {
-    @apply bg-dark-950 border border-dark-700 rounded-lg p-3 font-mono text-sm 
-           text-dark-200 overflow-x-auto;
+    @apply bg-navy-950 border border-cyan-900/30 rounded-lg p-3 font-mono text-sm 
+           text-gray-300 overflow-x-auto;
   }
 
   .timeline-item {
-    @apply relative pl-6 pb-4 border-l-2 border-dark-700 last:border-l-transparent;
+    @apply relative pl-6 pb-4 border-l-2 border-cyan-900/30 last:border-l-transparent;
   }
 
   .timeline-dot {
-    @apply absolute left-0 top-0 w-3 h-3 bg-accent-primary rounded-full 
-           -translate-x-[7px] ring-4 ring-dark-800;
+    @apply absolute left-0 top-0 w-3 h-3 bg-cyan-500 rounded-full 
+           -translate-x-[7px] ring-4 ring-navy-900 shadow-lg shadow-cyan-500/50;
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-accent-primary to-accent-tertiary 
+    @apply bg-gradient-to-r from-cyan-400 to-cyan-600 
            bg-clip-text text-transparent;
   }
 
   .glass {
-    @apply bg-dark-800/80 backdrop-blur-sm;
+    @apply bg-navy-900/60 backdrop-blur-md border border-cyan-900/20;
+  }
+
+  .glow-border {
+    @apply border-cyan-500/50 shadow-lg shadow-cyan-500/20;
+  }
+
+  .neon-text {
+    @apply text-cyan-400;
+    text-shadow: 0 0 10px rgba(100, 255, 218, 0.5);
   }
 }
 

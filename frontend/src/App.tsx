@@ -27,22 +27,22 @@ function NavBar() {
   ];
 
   return (
-    <nav className="bg-gradient-to-r from-gray-900 via-gray-900 to-gray-800 border-b border-gray-700/50 shadow-lg">
+    <nav className="bg-gradient-to-r from-navy-900 via-navy-800 to-navy-900 border-b border-cyan-900/30 shadow-lg shadow-cyan-500/10">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 via-cyan-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <div className="w-9 h-9 bg-gradient-to-br from-cyan-500 via-cyan-600 to-cyan-700 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/40">
                 <Brain className="w-5 h-5 text-white" />
               </div>
-              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-cyan-400 rounded-full animate-pulse shadow-lg shadow-cyan-400/50" />
             </div>
             <div className="flex flex-col">
-              <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
+              <span className="text-lg font-bold bg-gradient-to-r from-cyan-400 via-cyan-300 to-cyan-500 bg-clip-text text-transparent">
                 ScrapeRL
               </span>
-              <span className="text-[9px] text-gray-500 font-medium tracking-wider -mt-0.5">
+              <span className="text-[9px] text-cyan-600 font-medium tracking-wider -mt-0.5">
                 RL-POWERED SCRAPING
               </span>
             </div>
