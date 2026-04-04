@@ -123,7 +123,12 @@ class EmbeddingsService:
         # Map task types to Google's task types
         google_task_type = "RETRIEVAL_DOCUMENT" if task_type == "document" else "RETRIEVAL_QUERY"
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:embedContent"
+        # Handle model name - remove "models/" prefix if already present
+        model_name = self.model
+        if model_name.startswith("models/"):
+            model_name = model_name[7:]  # Remove "models/" prefix
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:embedContent"
         params = {"key": self.api_key}
         payload = {
             "content": {"parts": [{"text": text}]},
