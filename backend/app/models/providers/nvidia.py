@@ -163,7 +163,7 @@ class NVIDIAProvider(BaseProvider):
             "Content-Type": "application/json",
         }
 
-    async def _rate_limit(self) -> None:
+    async def _apply_rate_limit(self) -> None:
         """Apply rate limiting between requests."""
         elapsed = time.time() - self._last_request_time
         min_interval = 0.3  # 300ms between requests
@@ -201,13 +201,13 @@ class NVIDIAProvider(BaseProvider):
         """
         # Validate model
         if model not in self.MODELS:
-            raise ModelNotFoundError(f"Model {model} not found. Available: {list(self.MODELS.keys())}")
+            raise ModelNotFoundError(self.PROVIDER_NAME, model)
 
         model_info = self.MODELS[model]
         model_id = model_info.id
 
         # Apply rate limiting
-        await self._rate_limit()
+        await self._apply_rate_limit()
 
         # Build request payload
         payload: dict[str, Any] = {
@@ -237,12 +237,12 @@ class NVIDIAProvider(BaseProvider):
                 )
 
                 if response.status_code == 401:
-                    raise AuthenticationError("Invalid NVIDIA API key")
+                    raise AuthenticationError(self.PROVIDER_NAME, "Invalid NVIDIA API key")
                 elif response.status_code == 429:
-                    raise RateLimitError("NVIDIA API rate limit exceeded")
+                    raise RateLimitError(self.PROVIDER_NAME)
                 elif response.status_code >= 400:
                     error_detail = response.text
-                    raise ProviderError(f"NVIDIA API error ({response.status_code}): {error_detail}")
+                    raise ProviderError(f"NVIDIA API error ({response.status_code}): {error_detail}", self.PROVIDER_NAME)
 
                 data = response.json()
 
@@ -270,7 +270,7 @@ class NVIDIAProvider(BaseProvider):
         except (AuthenticationError, RateLimitError, ProviderError, ModelNotFoundError):
             raise
         except Exception as e:
-            raise ProviderError(f"NVIDIA request failed: {str(e)}") from e
+            raise ProviderError(f"NVIDIA request failed: {str(e)}", self.PROVIDER_NAME) from e
 
     async def complete_stream(
         self,
@@ -297,12 +297,12 @@ class NVIDIAProvider(BaseProvider):
             Same as complete()
         """
         if model not in self.MODELS:
-            raise ModelNotFoundError(f"Model {model} not found")
+            raise ModelNotFoundError(self.PROVIDER_NAME, model)
 
         model_info = self.MODELS[model]
         model_id = model_info.id
 
-        await self._rate_limit()
+        await self._apply_rate_limit()
 
         payload: dict[str, Any] = {
             "model": model_id,
@@ -330,12 +330,12 @@ class NVIDIAProvider(BaseProvider):
                     json=payload,
                 ) as response:
                     if response.status_code == 401:
-                        raise AuthenticationError("Invalid NVIDIA API key")
+                        raise AuthenticationError(self.PROVIDER_NAME, "Invalid NVIDIA API key")
                     elif response.status_code == 429:
-                        raise RateLimitError("NVIDIA API rate limit exceeded")
+                        raise RateLimitError(self.PROVIDER_NAME)
                     elif response.status_code >= 400:
                         error_detail = await response.aread()
-                        raise ProviderError(f"NVIDIA API error: {error_detail.decode()}")
+                        raise ProviderError(f"NVIDIA API error: {error_detail.decode()}", self.PROVIDER_NAME)
 
                     async for line in response.aiter_lines():
                         if not line.strip() or not line.startswith("data: "):
@@ -358,14 +358,30 @@ class NVIDIAProvider(BaseProvider):
         except (AuthenticationError, RateLimitError, ProviderError, ModelNotFoundError):
             raise
         except Exception as e:
-            raise ProviderError(f"NVIDIA streaming failed: {str(e)}") from e
+            raise ProviderError(f"NVIDIA streaming failed: {str(e)}", self.PROVIDER_NAME) from e
 
     def list_models(self) -> list[ModelInfo]:
         """List all available NVIDIA models."""
         return list(self.MODELS.values())
+    
+    def get_models(self) -> list[ModelInfo]:
+        """Get list of available models (required by abstract base)."""
+        return self.list_models()
+    
+    async def stream(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Stream a completion (delegates to complete_stream)."""
+        async for chunk in self.complete_stream(messages, model, temperature, max_tokens, **kwargs):
+            yield chunk
 
     def get_model_info(self, model: str) -> ModelInfo:
         """Get information about a specific model."""
         if model not in self.MODELS:
-            raise ModelNotFoundError(f"Model {model} not found")
+            raise ModelNotFoundError(self.PROVIDER_NAME, model)
         return self.MODELS[model]

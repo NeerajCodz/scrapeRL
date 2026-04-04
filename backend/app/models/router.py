@@ -313,8 +313,12 @@ class SmartModelRouter:
     def get_provider_for_model(self, model: str) -> BaseProvider | None:
         """Get the provider for a specific model."""
         for provider in self.providers.values():
-            if provider.get_model_info(model):
-                return provider
+            try:
+                if provider.get_model_info(model):
+                    return provider
+            except Exception:
+                # Model not found in this provider, continue to next
+                pass
 
             # Check aliases for Anthropic and Google
             if hasattr(provider, "MODEL_ALIASES"):
