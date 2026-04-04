@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = Field(default=None, description="Anthropic API key")
     google_api_key: SecretStr | None = Field(default=None, description="Google AI API key")
     groq_api_key: SecretStr | None = Field(default=None, description="Groq API key")
+    nvidia_api_key: SecretStr | None = Field(default=None, description="NVIDIA API key")
 
     # Model Defaults
     default_model: str = "gpt-4o-mini"
@@ -89,6 +90,8 @@ class Settings(BaseSettings):
             providers.append("google")
         if self.groq_api_key:
             providers.append("groq")
+        if self.nvidia_api_key:
+            providers.append("nvidia")
         return providers
 
 
