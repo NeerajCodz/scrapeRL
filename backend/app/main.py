@@ -74,6 +74,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Initializing tool registry...")
     _tool_registry = MCPToolRegistry()
     await _tool_registry.initialize()
+    
+    # Update dependency container
+    from app.api import deps
+    deps.container.set_memory_manager(_memory_manager)
+    deps.container.set_model_router(_model_router)
+    deps.container.set_tool_registry(_tool_registry)
 
     logger.info("Application startup complete")
 
@@ -127,6 +133,10 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix=api_prefix, tags=["Memory"])
     app.include_router(settings_routes.router, prefix=api_prefix, tags=["Settings"])
     app.include_router(plugins.router, prefix=api_prefix, tags=["Plugins"])
+    
+    # Import and include providers router
+    from app.api.routes import providers
+    app.include_router(providers.router, prefix=api_prefix, tags=["Providers"])
 
     # Serve static files (frontend build)
     static_dir = Path(__file__).parent.parent / "static"
