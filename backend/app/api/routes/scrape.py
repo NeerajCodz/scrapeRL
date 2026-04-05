@@ -2063,6 +2063,30 @@ async def scrape_stream(
             "'site_strategy': (payload.get('site_template') or {}).get('default_strategy')"
             "}"
         )
+        
+        # Tool call: sandbox.execute (planner)
+        sandbox_tool_event = _record_step(
+            session,
+            ScrapeStep(
+                step_number=len(session["steps"]) + 1,
+                action="tool_call",
+                status="running",
+                message="sandbox.execute(code='planner_analysis')",
+                extracted_data={
+                    "tool_name": "sandbox.execute",
+                    "tool_description": "Execute Python code in isolated sandbox environment",
+                    "parameters": {
+                        "code_type": "planner_analysis",
+                        "imports": ["json"],
+                        "payload_keys": list(planner_payload.keys()),
+                    },
+                },
+                timestamp=_now_iso(),
+            ),
+        )
+        await manager.broadcast(sandbox_tool_event, session_id)
+        yield _sse_event(sandbox_tool_event)
+        
         try:
             planner_sandbox = await asyncio.to_thread(
                 execute_python_sandbox,
@@ -2077,6 +2101,29 @@ async def scrape_stream(
                 output=None,
                 error=f"Planner sandbox setup failed: {exc}",
             )
+
+        # Tool call result
+        sandbox_result_event = _record_step(
+            session,
+            ScrapeStep(
+                step_number=len(session["steps"]),
+                action="tool_call",
+                status="completed" if planner_sandbox.success else "failed",
+                message=f"sandbox.execute() → {'success' if planner_sandbox.success else 'failed'}",
+                reward=0.05 if planner_sandbox.success else 0.0,
+                extracted_data={
+                    "tool_name": "sandbox.execute",
+                    "result": {
+                        "success": planner_sandbox.success,
+                        "output_keys": list(planner_sandbox.output.keys()) if planner_sandbox.output else [],
+                        "error": planner_sandbox.error,
+                    },
+                },
+                timestamp=_now_iso(),
+            ),
+        )
+        await manager.broadcast(sandbox_result_event, session_id)
+        yield _sse_event(sandbox_result_event)
 
         if planner_sandbox.success and planner_sandbox.output is not None:
             planner_python_event = _record_step(
@@ -2163,6 +2210,31 @@ async def scrape_stream(
                 "'strategy': payload.get('navigation_strategy')"
                 "}"
             )
+            
+            # Tool call: sandbox.execute (navigator)
+            nav_sandbox_tool_event = _record_step(
+                session,
+                ScrapeStep(
+                    step_number=len(session["steps"]) + 1,
+                    action="tool_call",
+                    url=url,
+                    status="running",
+                    message="sandbox.execute(code='navigator_analysis')",
+                    extracted_data={
+                        "tool_name": "sandbox.execute",
+                        "tool_description": "Execute navigator analysis in sandbox",
+                        "parameters": {
+                            "code_type": "navigator_analysis",
+                            "imports": ["json"],
+                            "url": url,
+                        },
+                    },
+                    timestamp=_now_iso(),
+                ),
+            )
+            await manager.broadcast(nav_sandbox_tool_event, session_id)
+            yield _sse_event(nav_sandbox_tool_event)
+            
             try:
                 navigator_sandbox = await asyncio.to_thread(
                     execute_python_sandbox,
@@ -2177,6 +2249,29 @@ async def scrape_stream(
                     output=None,
                     error=f"Navigator sandbox setup failed: {exc}",
                 )
+
+            # Tool call result
+            nav_sandbox_result_event = _record_step(
+                session,
+                ScrapeStep(
+                    step_number=len(session["steps"]),
+                    action="tool_call",
+                    url=url,
+                    status="completed" if navigator_sandbox.success else "failed",
+                    message=f"sandbox.execute() → {'success' if navigator_sandbox.success else 'failed'}",
+                    reward=0.05 if navigator_sandbox.success else 0.0,
+                    extracted_data={
+                        "tool_name": "sandbox.execute",
+                        "result": {
+                            "success": navigator_sandbox.success,
+                            "output_keys": list(navigator_sandbox.output.keys()) if navigator_sandbox.output else [],
+                        },
+                    },
+                    timestamp=_now_iso(),
+                ),
+            )
+            await manager.broadcast(nav_sandbox_result_event, session_id)
+            yield _sse_event(nav_sandbox_result_event)
 
             if navigator_sandbox.success and navigator_sandbox.output is not None:
                 navigator_python_event = _record_step(
@@ -2292,6 +2387,77 @@ async def scrape_stream(
         }
 
         sandbox_code = request.python_code or DEFAULT_ANALYSIS_CODE
+        
+        # Tool call: pandas.DataFrame (data analysis)
+        pandas_tool_event = _record_step(
+            session,
+            ScrapeStep(
+                step_number=len(session["steps"]) + 1,
+                action="tool_call",
+                status="running",
+                message="pandas.DataFrame(rows)",
+                extracted_data={
+                    "tool_name": "pandas.DataFrame",
+                    "tool_description": "Create DataFrame from extracted dataset rows",
+                    "parameters": {
+                        "row_count": len(dataset_rows),
+                        "source_count": len(source_links),
+                    },
+                },
+                timestamp=_now_iso(),
+            ),
+        )
+        await manager.broadcast(pandas_tool_event, session_id)
+        yield _sse_event(pandas_tool_event)
+        
+        # Tool call: bs4.BeautifulSoup (HTML analysis)
+        if html_samples:
+            bs4_tool_event = _record_step(
+                session,
+                ScrapeStep(
+                    step_number=len(session["steps"]) + 1,
+                    action="tool_call",
+                    status="running",
+                    message=f"bs4.BeautifulSoup(html, 'html.parser') × {len(html_samples)}",
+                    extracted_data={
+                        "tool_name": "bs4.BeautifulSoup",
+                        "tool_description": "Parse HTML samples for link analysis",
+                        "parameters": {
+                            "parser": "html.parser",
+                            "sample_count": len(html_samples),
+                            "total_bytes": sum(len(h) for h in html_samples.values()),
+                        },
+                    },
+                    timestamp=_now_iso(),
+                ),
+            )
+            await manager.broadcast(bs4_tool_event, session_id)
+            yield _sse_event(bs4_tool_event)
+        
+        # Tool call: sandbox.execute (analysis)
+        analysis_sandbox_event = _record_step(
+            session,
+            ScrapeStep(
+                step_number=len(session["steps"]) + 1,
+                action="tool_call",
+                status="running",
+                message="sandbox.execute(code='data_analysis')",
+                extracted_data={
+                    "tool_name": "sandbox.execute",
+                    "tool_description": "Run comprehensive data analysis in sandbox",
+                    "parameters": {
+                        "imports": ["pandas", "numpy", "bs4", "json"],
+                        "dataset_rows": len(dataset_rows),
+                        "html_samples": len(html_samples),
+                        "custom_code": bool(request.python_code),
+                    },
+                },
+                timestamp=_now_iso(),
+            ),
+        )
+        await manager.broadcast(analysis_sandbox_event, session_id)
+        yield _sse_event(analysis_sandbox_event)
+        
         try:
             sandbox_result = await asyncio.to_thread(
                 execute_python_sandbox,
@@ -2307,6 +2473,29 @@ async def scrape_stream(
                 error=f"Sandbox setup failed: {exc}",
                 stderr="",
             )
+        
+        # Tool call result: sandbox.execute
+        sandbox_exec_result_event = _record_step(
+            session,
+            ScrapeStep(
+                step_number=len(session["steps"]),
+                action="tool_call",
+                status="completed" if sandbox_result.success else "failed",
+                message=f"sandbox.execute() → {'analysis complete' if sandbox_result.success else 'failed'}",
+                reward=0.1 if sandbox_result.success else 0.0,
+                extracted_data={
+                    "tool_name": "sandbox.execute",
+                    "result": {
+                        "success": sandbox_result.success,
+                        "output_keys": list(sandbox_result.output.keys()) if sandbox_result.output else [],
+                        "error": sandbox_result.error if not sandbox_result.success else None,
+                    },
+                },
+                timestamp=_now_iso(),
+            ),
+        )
+        await manager.broadcast(sandbox_exec_result_event, session_id)
+        yield _sse_event(sandbox_exec_result_event)
 
         if sandbox_result.success and sandbox_result.output is not None:
             if isinstance(session["extracted_data"], dict):
@@ -2348,16 +2537,84 @@ async def scrape_stream(
             yield _sse_event(sandbox_event)
 
     duration = time.time() - start_time
+    
+    # Tool call: json.dumps (output formatting)
+    json_format_event = _record_step(
+        session,
+        ScrapeStep(
+            step_number=len(session["steps"]) + 1,
+            action="tool_call",
+            status="running",
+            message=f"json.dumps(data, format='{request.output_format.value}')",
+            extracted_data={
+                "tool_name": "json.dumps",
+                "tool_description": f"Format extracted data as {request.output_format.value.upper()}",
+                "parameters": {
+                    "output_format": request.output_format.value,
+                    "data_keys": list(session["extracted_data"].keys()) if isinstance(session["extracted_data"], dict) else ["data"],
+                },
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    await manager.broadcast(json_format_event, session_id)
+    yield _sse_event(json_format_event)
+    
     output = await format_output(
         session["extracted_data"],
         request.output_format,
         request.output_instructions,
     )
+    
+    json_format_result_event = _record_step(
+        session,
+        ScrapeStep(
+            step_number=len(session["steps"]),
+            action="tool_call",
+            status="completed",
+            message=f"json.dumps() → {len(output)} bytes",
+            reward=0.05,
+            extracted_data={
+                "tool_name": "json.dumps",
+                "result": {
+                    "output_length": len(output),
+                    "format": request.output_format.value,
+                },
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    await manager.broadcast(json_format_result_event, session_id)
+    yield _sse_event(json_format_result_event)
+    
     output_ext = request.output_format.value
     _write_session_artifact(session, f"final_output.{output_ext}", output)
     _write_session_json_artifact(session, "final_extracted_data.json", session["extracted_data"])
 
     if request.enable_memory:
+        # Tool call: memory.store
+        memory_store_event = _record_step(
+            session,
+            ScrapeStep(
+                step_number=len(session["steps"]) + 1,
+                action="tool_call",
+                status="running",
+                message="memory.store(key='summary', type='LONG_TERM')",
+                extracted_data={
+                    "tool_name": "memory.store",
+                    "tool_description": "Store scrape summary in long-term memory",
+                    "parameters": {
+                        "key": f"scrape:{session_id}:summary",
+                        "memory_type": "LONG_TERM",
+                        "output_length": len(output),
+                    },
+                },
+                timestamp=_now_iso(),
+            ),
+        )
+        await manager.broadcast(memory_store_event, session_id)
+        yield _sse_event(memory_store_event)
+        
         try:
             await memory_manager.store(
                 key=f"scrape:{session_id}:summary",
@@ -2371,8 +2628,43 @@ async def scrape_stream(
                 },
             )
             _write_session_artifact(session, "memory_summary.txt", output)
+            
+            # Tool call result: memory.store
+            memory_store_result_event = _record_step(
+                session,
+                ScrapeStep(
+                    step_number=len(session["steps"]),
+                    action="tool_call",
+                    status="completed",
+                    message="memory.store() → stored",
+                    reward=0.05,
+                    extracted_data={
+                        "tool_name": "memory.store",
+                        "result": {"stored": True, "key": f"scrape:{session_id}:summary"},
+                    },
+                    timestamp=_now_iso(),
+                ),
+            )
+            await manager.broadcast(memory_store_result_event, session_id)
+            yield _sse_event(memory_store_result_event)
         except Exception as exc:
             session["errors"].append(f"Failed to store summary memory: {exc}")
+            memory_store_fail_event = _record_step(
+                session,
+                ScrapeStep(
+                    step_number=len(session["steps"]),
+                    action="tool_call",
+                    status="failed",
+                    message=f"memory.store() → {str(exc)[:50]}",
+                    extracted_data={
+                        "tool_name": "memory.store",
+                        "result": {"stored": False, "error": str(exc)[:100]},
+                    },
+                    timestamp=_now_iso(),
+                ),
+            )
+            await manager.broadcast(memory_store_fail_event, session_id)
+            yield _sse_event(memory_store_fail_event)
 
     response = ScrapeResponse(
         session_id=session_id,
