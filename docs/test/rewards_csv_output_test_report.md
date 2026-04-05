@@ -27,17 +27,34 @@ This test report validates the fixes made to the reward calculation system and C
 | extract | +0.50 per item | Based on extraction count |
 | complete | +1.00 | Completion bonus |
 
-## Test Results
+## Test Results (15 Tests Total)
 
-### Test 1: GitHub Trending (CSV Output)
-- **URL:** https://github.com/trending
-- **Output Format:** CSV
-- **Status:** ✅ PASS
-- **Total Reward:** 7.50
-- **Duration:** 2.28s
-- **Repos Extracted:** 10
+### Initial 5 Tests
 
-**CSV Output Sample:**
+| Test | URL | Output Format | Status | Reward | Duration |
+|------|-----|---------------|--------|--------|----------|
+| GitHub Trending | github.com/trending | CSV | ✅ PASS | 7.50 | 2.28s |
+| HackerNews | news.ycombinator.com | JSON | ✅ PASS | 7.356 | 1.40s |
+| Wikipedia | en.wikipedia.org | Text | ✅ PASS | 4.877 | 1.77s |
+| PyPI | pypi.org/project/requests | JSON | ✅ PASS | 4.877 | 0.36s |
+| NPM | npmjs.com/package/express | Markdown | ✅ PASS | 4.744 | 0.18s |
+
+### Additional 10 Tests
+
+| Test | URL | Status | Reward |
+|------|-----|--------|--------|
+| Reddit | reddit.com/r/programming | ✅ PASS | 9.158 |
+| MDN Docs | developer.mozilla.org | ✅ PASS | 4.877 |
+| DuckDuckGo | duckduckgo.com | ✅ PASS | 7.193 |
+| Kaggle | kaggle.com/datasets | ✅ PASS | 6.970 |
+| DevTo | dev.to | ✅ PASS | 7.289 |
+| Product Hunt | producthunt.com | ✅ PASS | 9.545 |
+| HN Jobs | news.ycombinator.com/jobs | ✅ PASS | 7.356 |
+| Python Docs | docs.python.org | ✅ PASS | 4.877 |
+| Rust Docs | doc.rust-lang.org | ✅ PASS | 4.877 |
+| Go Docs | go.dev/doc | ✅ PASS | 4.877 |
+
+### CSV Output Sample (GitHub Trending)
 ```csv
 username,repo_name,stars,forks
 google-ai-edge,gallery,"16,334","1,485"
@@ -46,41 +63,13 @@ block,goose,"36,003","3,389"
 freeCodeCamp,freeCodeCamp,"441,088","44,069"
 ```
 
-### Test 2: HackerNews (JSON Output)
-- **URL:** https://news.ycombinator.com
-- **Output Format:** JSON
-- **Status:** ✅ PASS
-- **Total Reward:** 7.356
-- **Duration:** 1.40s
-
-### Test 3: Wikipedia (Text Output)
-- **URL:** https://en.wikipedia.org/wiki/Machine_learning
-- **Output Format:** Text
-- **Status:** ✅ PASS
-- **Total Reward:** 4.877
-- **Duration:** 1.77s
-
-### Test 4: PyPI Package (JSON Output)
-- **URL:** https://pypi.org/project/requests/
-- **Output Format:** JSON
-- **Status:** ✅ PASS
-- **Total Reward:** 4.877
-- **Duration:** 0.36s
-
-### Test 5: NPM Package (Markdown Output)
-- **URL:** https://www.npmjs.com/package/express
-- **Output Format:** Markdown
-- **Status:** ✅ PASS
-- **Total Reward:** 4.744
-- **Duration:** 0.18s
-
 ## Memory System Verification
 
-**After running 5 tests:**
-- Short-term memory: 12 entries
-- Long-term memory: 12 entries
+**After running 15 tests:**
+- Short-term memory: 22 entries
+- Long-term memory: 22 entries
 - Working memory: 0 entries
-- Total: 24 entries
+- Total: 44 entries
 
 Memory correctly stores scrape requests and summaries for each session.
 
@@ -129,8 +118,8 @@ All tests pass with proper reward accumulation and clean output formatting:
 
 | Metric | Result |
 |--------|--------|
-| Tests Run | 5 |
-| Tests Passed | 5 |
+| Tests Run | 15 |
+| Tests Passed | 15 |
 | Tests Failed | 0 |
 | Success Rate | 100% |
 
