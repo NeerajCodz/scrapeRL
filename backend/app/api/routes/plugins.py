@@ -95,6 +95,16 @@ PLUGIN_REGISTRY = {
             "requires_key": False,
         },
         {
+            "id": "mcp-python-sandbox",
+            "name": "Python Sandbox Executor",
+            "category": "mcps",
+            "description": "Run sandboxed Python analysis for datasets and pages",
+            "version": "1.0.0",
+            "size": "95KB",
+            "installed": True,
+            "requires_key": False,
+        },
+        {
             "id": "mcp-screenshot",
             "name": "Screenshot Tools",
             "category": "mcps",
@@ -168,6 +178,16 @@ PLUGIN_REGISTRY = {
             "requires_key": False,
         },
         {
+            "id": "web_scraper",
+            "name": "Web Scraper",
+            "category": "skills",
+            "description": "Core web scraping and navigation functionality",
+            "version": "1.0.0",
+            "size": "120KB",
+            "installed": True,
+            "requires_key": False,
+        },
+        {
             "id": "skill-captcha",
             "name": "Captcha Solver",
             "category": "skills",
@@ -211,6 +231,56 @@ PLUGIN_REGISTRY = {
             "requires_key": False,
         },
         {
+            "id": "proc-python",
+            "name": "Python Analysis Processor",
+            "category": "processors",
+            "description": "Execute safe Python transformations on extracted data",
+            "version": "1.0.0",
+            "size": "55KB",
+            "installed": True,
+            "requires_key": False,
+        },
+        {
+            "id": "proc-pandas",
+            "name": "Pandas Processor",
+            "category": "processors",
+            "description": "Tabular analysis and aggregation with pandas",
+            "version": "1.0.0",
+            "size": "130KB",
+            "installed": True,
+            "requires_key": False,
+        },
+        {
+            "id": "proc-numpy",
+            "name": "NumPy Processor",
+            "category": "processors",
+            "description": "Numerical analysis and statistics with NumPy",
+            "version": "1.0.0",
+            "size": "90KB",
+            "installed": True,
+            "requires_key": False,
+        },
+        {
+            "id": "proc-bs4",
+            "name": "BeautifulSoup Processor",
+            "category": "processors",
+            "description": "Advanced HTML parsing and link/content analysis via bs4",
+            "version": "1.0.0",
+            "size": "45KB",
+            "installed": True,
+            "requires_key": False,
+        },
+        {
+            "id": "python_sandbox",
+            "name": "Python Sandbox",
+            "category": "processors",
+            "description": "Execute Python code in secure sandbox environment",
+            "version": "1.0.0",
+            "size": "85KB",
+            "installed": True,
+            "requires_key": False,
+        },
+        {
             "id": "proc-excel",
             "name": "Excel Processor",
             "category": "processors",
@@ -241,12 +311,17 @@ _installed_plugins: set[str] = {
     "mcp-browser",
     "mcp-search",
     "mcp-html",
+    "mcp-python-sandbox",
     "skill-planner",
     "skill-navigator",
     "skill-extractor",
     "skill-verifier",
     "proc-json",
     "proc-csv",
+    "proc-python",
+    "proc-pandas",
+    "proc-numpy",
+    "proc-bs4",
 }
 
 
@@ -311,6 +386,19 @@ async def list_installed_plugins() -> dict[str, Any]:
     return {
         "plugins": installed,
         "count": len(installed),
+    }
+
+
+@router.get("/categories")
+async def get_categories() -> dict[str, Any]:
+    """Get plugin categories with descriptions."""
+    return {
+        "categories": [
+            {"id": "apis", "name": "API Providers", "description": "LLM and AI service providers", "icon": "🔌"},
+            {"id": "mcps", "name": "MCP Tools", "description": "Model Context Protocol tools", "icon": "🔧"},
+            {"id": "skills", "name": "Skills/Agents", "description": "Specialized agent capabilities", "icon": "🤖"},
+            {"id": "processors", "name": "Data Processors", "description": "Data transformation tools", "icon": "📊"},
+        ],
     }
 
 
@@ -382,7 +470,21 @@ async def uninstall_plugin(action: PluginAction) -> dict[str, Any]:
         }
 
     # Check if it's a core plugin
-    core_plugins = {"mcp-browser", "mcp-search", "mcp-html", "skill-planner", "skill-navigator", "skill-extractor", "skill-verifier", "proc-json"}
+    core_plugins = {
+        "mcp-browser",
+        "mcp-search",
+        "mcp-html",
+        "mcp-python-sandbox",
+        "skill-planner",
+        "skill-navigator",
+        "skill-extractor",
+        "skill-verifier",
+        "proc-json",
+        "proc-python",
+        "proc-pandas",
+        "proc-numpy",
+        "proc-bs4",
+    }
     if plugin_id in core_plugins:
         raise HTTPException(
             status_code=400,
@@ -399,14 +501,3 @@ async def uninstall_plugin(action: PluginAction) -> dict[str, Any]:
     }
 
 
-@router.get("/categories")
-async def get_categories() -> dict[str, Any]:
-    """Get plugin categories with descriptions."""
-    return {
-        "categories": [
-            {"id": "apis", "name": "API Providers", "description": "LLM and AI service providers", "icon": "🔌"},
-            {"id": "mcps", "name": "MCP Tools", "description": "Model Context Protocol tools", "icon": "🔧"},
-            {"id": "skills", "name": "Skills/Agents", "description": "Specialized agent capabilities", "icon": "🤖"},
-            {"id": "processors", "name": "Data Processors", "description": "Data transformation tools", "icon": "📊"},
-        ],
-    }

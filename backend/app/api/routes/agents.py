@@ -101,8 +101,107 @@ class AgentState(BaseModel):
     memory_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
+class AgentModule(BaseModel):
+    """Installable/browsable agent module definition."""
+
+    id: str
+    name: str
+    role: str
+    description: str
+    version: str
+    installed: bool
+    default: bool
+    orchestrator_compatible: bool = True
+
+
+class AgentModuleAction(BaseModel):
+    """Install/uninstall request for an agent module."""
+
+    agent_id: str
+
+
 # Store for agent states
 _agent_states: dict[str, AgentState] = {}
+
+_AGENT_MODULE_CATALOG: list[dict[str, Any]] = [
+    {
+        "id": "planner-agent",
+        "name": "Planner Agent",
+        "role": "planner",
+        "description": "Creates scrape plans and execution strategy",
+        "version": "1.0.0",
+        "default": True,
+        "orchestrator_compatible": True,
+    },
+    {
+        "id": "navigator-agent",
+        "name": "Navigator Agent",
+        "role": "navigator",
+        "description": "Finds links and chooses crawl paths",
+        "version": "1.0.0",
+        "default": True,
+        "orchestrator_compatible": True,
+    },
+    {
+        "id": "extractor-agent",
+        "name": "Extractor Agent",
+        "role": "extractor",
+        "description": "Extracts structured data from fetched content",
+        "version": "1.0.0",
+        "default": True,
+        "orchestrator_compatible": True,
+    },
+    {
+        "id": "verifier-agent",
+        "name": "Verifier Agent",
+        "role": "verifier",
+        "description": "Validates extracted values and output quality",
+        "version": "1.0.0",
+        "default": True,
+        "orchestrator_compatible": True,
+    },
+    {
+        "id": "memory-agent",
+        "name": "Memory Agent",
+        "role": "memory",
+        "description": "Manages memory writes and retrieval",
+        "version": "1.0.0",
+        "default": True,
+        "orchestrator_compatible": True,
+    },
+    {
+        "id": "coordinator-agent",
+        "name": "Coordinator Agent",
+        "role": "coordinator",
+        "description": "Orchestrates multi-agent execution",
+        "version": "1.0.0",
+        "default": True,
+        "orchestrator_compatible": True,
+    },
+    {
+        "id": "research-agent",
+        "name": "Research Agent",
+        "role": "research",
+        "description": "Focused web search and source discovery",
+        "version": "1.0.0",
+        "default": False,
+        "orchestrator_compatible": True,
+    },
+    {
+        "id": "dataset-agent",
+        "name": "Dataset Builder Agent",
+        "role": "dataset",
+        "description": "Builds/normalizes datasets from scraped files",
+        "version": "1.0.0",
+        "default": False,
+        "orchestrator_compatible": True,
+    },
+]
+
+_DEFAULT_AGENT_MODULES: set[str] = {
+    item["id"] for item in _AGENT_MODULE_CATALOG if item.get("default")
+}
+_installed_agent_modules: set[str] = set(_DEFAULT_AGENT_MODULES)
 
 
 @router.get(
@@ -132,7 +231,6 @@ async def list_agents() -> dict[str, Any]:
             "agent_id": agent_id,
             "type": state.agent_type,
             "status": state.status,
-            "episode_id": state.episode_id,
         }
         for agent_id, state in _agent_states.items()
     ]
@@ -140,6 +238,7 @@ async def list_agents() -> dict[str, Any]:
     return {
         "agent_types": agent_types,
         "active_agents": active_agents,
+        "installed_agents": sorted(_installed_agent_modules),
         "total_types": len(AgentType),
         "active_count": len(_agent_states),
     }
@@ -217,42 +316,60 @@ async def generate_plan(request: PlanRequest) -> PlanResponse:
     plan_id = str(uuid4())
     logger.info(f"Generating plan for episode {request.episode_id}")
 
-    try:
-        from app.agents.planner import PlannerAgent
+    steps = [
+        PlanStep(
+            step_number=1,
+            action_type="create_plan",
+            description=f"Analyze task goal: {request.task_description}",
+            agent=AgentType.PLANNER,
+            estimated_cost=0.001,
+        ),
+        PlanStep(
+            step_number=2,
+            action_type="navigate",
+            description="Navigate to target pages and gather context",
+            agent=AgentType.NAVIGATOR,
+            dependencies=[1],
+            estimated_cost=0.01,
+        ),
+        PlanStep(
+            step_number=3,
+            action_type="extract_field",
+            description="Extract required fields from observed content",
+            agent=AgentType.EXTRACTOR,
+            dependencies=[2],
+            estimated_cost=0.02,
+        ),
+        PlanStep(
+            step_number=4,
+            action_type="verify_field",
+            description="Validate extracted fields against constraints",
+            agent=AgentType.VERIFIER,
+            dependencies=[3],
+            estimated_cost=0.005,
+        ),
+    ]
 
-        planner = PlannerAgent()
-        plan_result = await planner.create_plan(
-            task_description=request.task_description,
-            current_state=request.current_state,
-            constraints=request.constraints,
-        )
-
-        steps = [
+    if request.constraints:
+        steps.append(
             PlanStep(
-                step_number=i + 1,
-                action_type=step["action_type"],
-                description=step["description"],
-                agent=AgentType(step["agent"]),
-                dependencies=step.get("dependencies", []),
-                estimated_cost=step.get("estimated_cost", 0.0),
+                step_number=len(steps) + 1,
+                action_type="apply_constraints",
+                description=f"Apply constraints: {', '.join(request.constraints)}",
+                agent=AgentType.PLANNER,
+                dependencies=[4],
+                estimated_cost=0.001,
             )
-            for i, step in enumerate(plan_result["steps"])
-        ]
+        )
 
-        return PlanResponse(
-            plan_id=plan_id,
-            episode_id=request.episode_id,
-            steps=steps,
-            total_estimated_steps=len(steps),
-            reasoning=plan_result.get("reasoning", ""),
-            confidence=plan_result.get("confidence", 0.8),
-        )
-    except Exception as e:
-        logger.error(f"Plan generation failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate plan: {str(e)}",
-        )
+    return PlanResponse(
+        plan_id=plan_id,
+        episode_id=request.episode_id,
+        steps=steps,
+        total_estimated_steps=len(steps),
+        reasoning="Generated a deterministic multi-agent plan for navigation, extraction, and verification.",
+        confidence=0.82,
+    )
 
 
 @router.get(
@@ -302,6 +419,135 @@ async def get_agent_types() -> dict[str, list[dict[str, str]]]:
         {"type": AgentType.COORDINATOR.value, "description": "Orchestrates multi-agent collaboration"},
     ]
     return {"agents": agent_info}
+
+
+@router.get(
+    "/catalog",
+    status_code=status.HTTP_200_OK,
+    summary="Get installable agents catalog",
+    description="List all agent modules with install status and orchestrator compatibility",
+)
+async def get_agent_catalog() -> dict[str, Any]:
+    """Get catalog of agent modules available for installation."""
+    agents = [
+        AgentModule(
+            id=item["id"],
+            name=item["name"],
+            role=item["role"],
+            description=item["description"],
+            version=item["version"],
+            installed=item["id"] in _installed_agent_modules,
+            default=bool(item.get("default")),
+            orchestrator_compatible=bool(item.get("orchestrator_compatible", True)),
+        ).model_dump()
+        for item in _AGENT_MODULE_CATALOG
+    ]
+    return {
+        "agents": agents,
+        "stats": {
+            "total": len(agents),
+            "installed": len(_installed_agent_modules),
+            "available": len(agents) - len(_installed_agent_modules),
+        },
+    }
+
+
+@router.get(
+    "/installed",
+    status_code=status.HTTP_200_OK,
+    summary="Get installed agent modules",
+    description="List currently installed agent modules",
+)
+async def get_installed_agents() -> dict[str, Any]:
+    """Get installed agent module list."""
+    installed = []
+    for item in _AGENT_MODULE_CATALOG:
+        if item["id"] in _installed_agent_modules:
+            installed.append(
+                AgentModule(
+                    id=item["id"],
+                    name=item["name"],
+                    role=item["role"],
+                    description=item["description"],
+                    version=item["version"],
+                    installed=True,
+                    default=bool(item.get("default")),
+                    orchestrator_compatible=bool(item.get("orchestrator_compatible", True)),
+                ).model_dump()
+            )
+    return {"agents": installed, "count": len(installed)}
+
+
+@router.post(
+    "/install",
+    status_code=status.HTTP_200_OK,
+    summary="Install an agent module",
+    description="Install an available agent module for orchestration",
+)
+async def install_agent(action: AgentModuleAction) -> dict[str, Any]:
+    """Install an agent module."""
+    selected = next((item for item in _AGENT_MODULE_CATALOG if item["id"] == action.agent_id), None)
+    if not selected:
+        raise HTTPException(status_code=404, detail=f"Agent module not found: {action.agent_id}")
+
+    if action.agent_id in _installed_agent_modules:
+        return {
+            "status": "already_installed",
+            "message": f"{selected['name']} is already installed",
+            "agent": {
+                **selected,
+                "installed": True,
+            },
+        }
+
+    _installed_agent_modules.add(action.agent_id)
+    return {
+        "status": "success",
+        "message": f"{selected['name']} installed successfully",
+        "agent": {
+            **selected,
+            "installed": True,
+        },
+    }
+
+
+@router.post(
+    "/uninstall",
+    status_code=status.HTTP_200_OK,
+    summary="Uninstall an agent module",
+    description="Uninstall a non-default agent module",
+)
+async def uninstall_agent(action: AgentModuleAction) -> dict[str, Any]:
+    """Uninstall an installed non-default agent module."""
+    selected = next((item for item in _AGENT_MODULE_CATALOG if item["id"] == action.agent_id), None)
+    if not selected:
+        raise HTTPException(status_code=404, detail=f"Agent module not found: {action.agent_id}")
+
+    if action.agent_id not in _installed_agent_modules:
+        return {
+            "status": "not_installed",
+            "message": f"{selected['name']} is not installed",
+            "agent": {
+                **selected,
+                "installed": False,
+            },
+        }
+
+    if action.agent_id in _DEFAULT_AGENT_MODULES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot uninstall default agent module: {selected['name']}",
+        )
+
+    _installed_agent_modules.discard(action.agent_id)
+    return {
+        "status": "success",
+        "message": f"{selected['name']} uninstalled successfully",
+        "agent": {
+            **selected,
+            "installed": False,
+        },
+    }
 
 
 @router.post(

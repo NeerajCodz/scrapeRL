@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, Settings as SettingsIcon, Package, Zap, Brain, Github, Book } from 'lucide-react';
+import { Home, Settings as SettingsIcon, Package, Zap, Brain, Github, Book, Cpu } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
 import PluginsPage from './components/PluginsPage';
 import DocsPage from './components/DocsPage';
+import AgentsPage from './components/AgentsPage';
 import { classNames } from './utils/helpers';
 
 const queryClient = new QueryClient({
@@ -21,6 +22,7 @@ function NavBar() {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
+    { path: '/agents', label: 'Agents', icon: Cpu },
     { path: '/plugins', label: 'Plugins', icon: Package },
     { path: '/docs', label: 'Docs', icon: Book },
     { path: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -91,12 +93,18 @@ function NavBar() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100 flex flex-col">
           <NavBar />
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/agents" element={<AgentsPage className="p-6" />} />
               <Route path="/plugins" element={<PluginsPage className="p-6" />} />
               <Route path="/docs" element={<DocsPage />} />
               <Route path="/settings" element={<Settings />} />

@@ -9,6 +9,9 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api.deps import MemoryManagerDep
+from app.memory.manager import MemoryType as ManagerMemoryType
+
 router = APIRouter(prefix="/memory")
 logger = logging.getLogger(__name__)
 
@@ -262,7 +265,7 @@ async def delete_memory_entry(entry_id: str) -> None:
     summary="Get memory stats",
     description="Get statistics about memory usage",
 )
-async def get_memory_stats() -> MemoryStats:
+async def get_memory_stats(memory_manager: MemoryManagerDep) -> MemoryStats:
     """
     Get memory statistics.
     
@@ -277,12 +280,23 @@ async def get_memory_stats() -> MemoryStats:
 
     timestamps = [e.timestamp for e in entries]
 
+    manager_stats = await memory_manager.get_stats()
+    manager_short_term = int(manager_stats.short_term.get("size", 0))
+    manager_working = int(manager_stats.working.get("size", 0))
+    manager_long_term = int(manager_stats.long_term.get("document_count", 0))
+    manager_shared = int(manager_stats.shared.get("state_key_count", 0))
+
+    short_term_count = counts[MemoryType.SHORT_TERM] + manager_short_term
+    working_count = counts[MemoryType.WORKING] + manager_working
+    long_term_count = counts[MemoryType.LONG_TERM] + manager_long_term
+    shared_count = counts[MemoryType.SHARED] + manager_shared
+
     return MemoryStats(
-        short_term_count=counts[MemoryType.SHORT_TERM],
-        working_count=counts[MemoryType.WORKING],
-        long_term_count=counts[MemoryType.LONG_TERM],
-        shared_count=counts[MemoryType.SHARED],
-        total_count=len(entries),
+        short_term_count=short_term_count,
+        working_count=working_count,
+        long_term_count=long_term_count,
+        shared_count=shared_count,
+        total_count=short_term_count + working_count + long_term_count + shared_count,
         oldest_entry=min(timestamps) if timestamps else None,
         newest_entry=max(timestamps) if timestamps else None,
     )
@@ -294,7 +308,7 @@ async def get_memory_stats() -> MemoryStats:
     summary="Clear memory layer",
     description="Clear all entries from a memory layer",
 )
-async def clear_memory_layer(memory_type: MemoryType) -> None:
+async def clear_memory_layer(memory_type: MemoryType, memory_manager: MemoryManagerDep) -> None:
     """
     Clear all entries from a memory layer.
     
@@ -305,6 +319,7 @@ async def clear_memory_layer(memory_type: MemoryType) -> None:
     to_delete = [k for k, v in _memory_store.items() if v.memory_type == memory_type]
     for key in to_delete:
         del _memory_store[key]
+    await memory_manager.clear(memory_type=ManagerMemoryType(memory_type.value))
     logger.info(f"Cleared {len(to_delete)} entries from {memory_type}")
 
 

@@ -58,6 +58,58 @@ async function request<T>(
   return data.data as T;
 }
 
+// Scraping types
+export interface ScrapeRequest {
+  assets: string[];
+  instructions: string;
+  output_instructions: string;
+  output_format: 'json' | 'csv' | 'markdown' | 'text';
+  complexity: 'low' | 'medium' | 'high';
+  model: string;
+  provider: string;
+  enable_memory: boolean;
+  enable_plugins: string[];
+  selected_agents: string[];
+  max_steps: number;
+  python_code?: string;
+}
+
+export interface ScrapeStep {
+  step_number: number;
+  action: string;
+  url: string | null;
+  status: string;
+  message: string;
+  reward: number;
+  extracted_data: Record<string, unknown> | null;
+  duration_ms: number | null;
+  timestamp: string;
+}
+
+export interface ScrapeResponse {
+  session_id: string;
+  status: string;
+  total_steps: number;
+  total_reward: number;
+  extracted_data: Record<string, unknown>;
+  output: string;
+  output_format: string;
+  duration_seconds: number;
+  urls_processed: number;
+  errors: string[];
+  selected_agents?: string[];
+  sandbox_artifacts?: string[];
+}
+
+export interface StreamEvent {
+  type: 'init' | 'url_start' | 'step' | 'url_complete' | 'complete' | 'error';
+  session_id?: string;
+  url?: string;
+  index?: number;
+  total?: number;
+  data?: ScrapeStep | ScrapeResponse | { url: string; error: string };
+}
+
 export const apiClient = {
   // Episode Management
   async resetEpisode(params: ResetRequest): Promise<Episode> {
@@ -221,7 +273,124 @@ export const apiClient = {
 
   // Health Check
   async healthCheck(): Promise<{ status: string; version: string }> {
-    return request('/health');
+    const response = await fetch(`${API_BASE}/health`);
+    if (!response.ok) {
+      throw new APIError('Health check failed', response.status);
+    }
+    return response.json();
+  },
+
+  // Scraping with streaming
+  streamScrape(
+    scrapeRequest: ScrapeRequest,
+    onInit?: (sessionId: string) => void,
+    onUrlStart?: (url: string, index: number, total: number) => void,
+    onStep?: (step: ScrapeStep) => void,
+    onUrlComplete?: (url: string, index: number) => void,
+    onComplete?: (response: ScrapeResponse) => void,
+    onError?: (error: string, url?: string) => void
+  ): { abort: () => void } {
+    const abortController = new AbortController();
+
+    fetch(`${API_BASE}/scrape/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(scrapeRequest),
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          onError?.(errorData.detail || 'Stream failed');
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          onError?.('No response body');
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event: StreamEvent = JSON.parse(line.slice(6));
+                
+                switch (event.type) {
+                  case 'init':
+                    onInit?.(event.session_id!);
+                    break;
+                  case 'url_start':
+                    onUrlStart?.(event.url!, event.index!, event.total!);
+                    break;
+                  case 'step':
+                    onStep?.(event.data as ScrapeStep);
+                    break;
+                  case 'url_complete':
+                    onUrlComplete?.(event.url!, event.index!);
+                    break;
+                  case 'complete':
+                    onComplete?.(event.data as ScrapeResponse);
+                    break;
+                  case 'error':
+                    const errData = event.data as { url: string; error: string };
+                    onError?.(errData.error, errData.url);
+                    break;
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          onError?.(err.message || 'Stream failed');
+        }
+      });
+
+    return { abort: () => abortController.abort() };
+  },
+
+  // Get scrape session status
+  async getScrapeStatus(sessionId: string): Promise<{
+    session_id: string;
+    status: string;
+    current_url_index: number;
+    total_urls: number;
+    total_reward: number;
+    extracted_count: number;
+    errors: string[];
+    duration: number;
+  }> {
+    const response = await fetch(`${API_BASE}/scrape/${sessionId}/status`);
+    if (!response.ok) {
+      throw new APIError('Failed to get scrape status', response.status);
+    }
+    return response.json();
+  },
+
+  // Get scrape result
+  async getScrapeResult(sessionId: string): Promise<ScrapeResponse> {
+    const response = await fetch(`${API_BASE}/scrape/${sessionId}/result`);
+    if (!response.ok) {
+      throw new APIError('Failed to get scrape result', response.status);
+    }
+    return response.json();
   },
 };
 

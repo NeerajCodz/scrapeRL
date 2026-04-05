@@ -99,6 +99,27 @@ Frontend will be at **http://localhost:5173**
 | POST | `/api/episode/step` | Execute an action in an episode |
 | GET | `/api/episode/state/{episode_id}` | Get current episode state |
 
+### Scrape Streaming Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/scrape/stream` | Run scrape with SSE live events (`init`, `url_start`, `step`, `url_complete`, `complete`) |
+| POST | `/api/scrape/` | Start scrape in background and return `session_id` |
+| GET | `/api/scrape/{session_id}/status` | Session status, reward, steps, plugin info |
+| GET | `/api/scrape/{session_id}/result` | Final formatted output (json/csv/markdown/text) |
+| GET | `/api/scrape/sessions` | List active scrape sessions |
+| DELETE | `/api/scrape/{session_id}` | Cancel running scrape session |
+
+#### Scrape plugin capabilities
+- Query assets can be discovered via `mcp-search` (non-URL asset text -> resolved links).
+- Python sandbox analysis plugins:
+  - `mcp-python-sandbox`
+  - `proc-python`
+  - `proc-pandas`
+  - `proc-numpy`
+  - `proc-bs4`
+- Optional request field: `python_code` (sandboxed, validated code; must assign `result`).
+- Sandbox execution is per-request isolated and cleaned after run.
+
 ### AI Provider Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -110,7 +131,7 @@ Frontend will be at **http://localhost:5173**
 ### WebSocket Endpoints
 | Type | Endpoint | Description |
 |------|----------|-------------|
-| WS | `/ws/episode/{episode_id}` | Real-time episode progress updates |
+| WS | `/ws/episode/{episode_id}` | Real-time episode/session updates |
 
 ### Other Endpoints
 - `/api/tasks` - Task management
@@ -154,6 +175,7 @@ scrapeRL/
 │   │   │       └── nvidia.py    # DeepSeek, Nemotron
 │   │   ├── memory/              # Memory system
 │   │   ├── tools/               # MCP tools
+│   │   ├── plugins/             # Sandboxed plugin executors
 │   │   └── types/               # Type definitions
 │   └── requirements.txt
 ├── frontend/
@@ -249,15 +271,13 @@ This app is configured for HuggingFace Spaces with Docker SDK:
 ### Manual Docker
 
 ```bash
-# Build
-docker build -t scraperl .
-
-# Run
-docker run -p 7860:7860 --env-file .env scraperl
-
-# Or use docker-compose
-docker-compose up
+# Run frontend + backend together
+docker compose up --build
 ```
+
+After startup:
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000/api`
 
 ### Environment Variables in Production
 

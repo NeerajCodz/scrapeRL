@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronRight,
   Terminal,
-  Wrench,
   Plug,
   Eye,
   Bot,
@@ -25,14 +24,16 @@ import {
   Info,
   Link,
   MessageSquare,
-  Image,
+  Image as ImageIcon,
   FolderOpen,
   Trash2,
   AlertCircle,
+  Download,
+  Copy,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { classNames } from '@/utils/helpers';
-import { apiClient } from '@/api/client';
+import { apiClient, type ScrapeStep, type ScrapeResponse, type ScrapeRequest } from '@/api/client';
 
 // Types
 interface TaskInput {
@@ -223,6 +224,14 @@ export const Dashboard: React.FC = () => {
   // Running state
   const [isRunning, setIsRunning] = useState(false);
   
+  // Streaming state
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<ScrapeStep | null>(null);
+  const [scrapeResult, setScrapeResult] = useState<ScrapeResponse | null>(null);
+  const [progress, setProgress] = useState({ urlIndex: 0, totalUrls: 0, currentUrl: '' });
+  const [extractedData, setExtractedData] = useState<Record<string, unknown>>({});
+  const abortControllerRef = useRef<{ abort: () => void } | null>(null);
+  
   // Assets
   const [assets, setAssets] = useState<Asset[]>([]);
   
@@ -333,6 +342,14 @@ export const Dashboard: React.FC = () => {
     { id: 'high', name: 'High', description: 'Complex interactive tasks', color: 'red', icon: '🔴' },
   ];
 
+  const detectOutputFormat = (outputInstruction: string): ScrapeRequest['output_format'] => {
+    const normalized = outputInstruction.toLowerCase();
+    if (normalized.includes('csv')) return 'csv';
+    if (normalized.includes('markdown') || normalized.includes('md')) return 'markdown';
+    if (normalized.includes('text') || normalized.includes('plain')) return 'text';
+    return 'json';
+  };
+
   // Add URL to list
   const handleAddUrl = () => {
     if (newUrl.trim() && !taskInput.urls.includes(newUrl.trim())) {
@@ -370,41 +387,216 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Start task
-  const handleStart = () => {
+  // Start task with streaming
+  const handleStart = useCallback(() => {
     if (taskInput.urls.length === 0 && !taskInput.instruction) return;
     
+    setStats(prev => ({ ...prev, episodes: prev.episodes + 1, steps: 0, totalReward: 0, avgReward: 0 }));
     setIsRunning(true);
     setCurrentView('dashboard');
+    setSessionId(null);
+    setProgress({ urlIndex: 0, totalUrls: taskInput.urls.length, currentUrl: '' });
+    setScrapeResult(null);
+    setExtractedData({});
+    setCurrentStep(null);
+    
+    // Build scrape request
+    const scrapeRequest: ScrapeRequest = {
+      assets: taskInput.urls,
+      instructions: taskInput.instruction,
+      output_instructions: taskInput.outputInstruction || 'Return as JSON',
+      output_format: detectOutputFormat(taskInput.outputInstruction),
+      complexity: taskInput.taskType,
+      model: taskInput.selectedModel.split('/')[1] || 'llama-3.3-70b',
+      provider: taskInput.selectedModel.split('/')[0] || 'nvidia',
+      enable_memory: true,
+      enable_plugins: taskInput.enabledPlugins,
+      selected_agents: taskInput.selectedAgents,
+      max_steps: 50,
+    };
     
     // Add initial log
     setLogs(prev => [...prev, {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
       level: 'info',
-      message: `Starting episode with ${taskInput.urls.length} URLs`,
+      message: `Starting scrape with ${taskInput.urls.length} URLs`,
       source: 'system',
     }]);
     
-    // Update stats
-    setStats(prev => ({ ...prev, episodes: prev.episodes + 1 }));
-  };
+    // Start streaming scrape
+    abortControllerRef.current = apiClient.streamScrape(
+      scrapeRequest,
+      // onInit
+      (sid) => {
+        setSessionId(sid);
+        setLogs(prev => [...prev, {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `Session started: ${sid.slice(0, 8)}...`,
+          source: 'scraper',
+        }]);
+      },
+      // onUrlStart
+      (url, index, total) => {
+        setProgress({ urlIndex: index, totalUrls: total, currentUrl: url });
+        setLogs(prev => [...prev, {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `Processing URL ${index + 1}/${total}: ${url}`,
+          source: 'scraper',
+        }]);
+      },
+      // onStep
+      (step) => {
+        setCurrentStep(step);
+        setStats(prev => {
+          const steps = prev.steps + 1;
+          const totalReward = prev.totalReward + step.reward;
+          return {
+            ...prev,
+            steps,
+            totalReward,
+            avgReward: totalReward / steps,
+          };
+        });
+        
+        // Update extracted data
+        if (step.extracted_data) {
+          setExtractedData(prev => ({ ...prev, ...step.extracted_data }));
+        }
+        
+        setLogs(prev => [...prev, {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          level: step.status === 'failed' ? 'error' : 'info',
+          message: `[${step.action}] ${step.message} (reward: ${step.reward.toFixed(2)})`,
+          source: step.url?.slice(0, 30) || 'step',
+        }]);
+      },
+      // onUrlComplete
+      (url, _index) => {
+        setLogs(prev => [...prev, {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `Completed: ${url}`,
+          source: 'scraper',
+        }]);
+      },
+      // onComplete
+      (response) => {
+        setScrapeResult(response);
+        setIsRunning(false);
+        setStats(prev => ({
+          ...prev,
+          totalReward: response.total_reward,
+          avgReward: response.total_reward / Math.max(prev.steps, 1),
+        }));
+
+        const extractedAssets = Object.entries(response.extracted_data).map(([url, data]) => ({
+          id: `${Date.now()}-${url}`,
+          type: 'data' as const,
+          name: `Data from ${url}`,
+          source: 'ai' as const,
+          content: JSON.stringify(data),
+          timestamp: new Date().toISOString(),
+        }));
+        setAssets(prev => [...prev, ...extractedAssets]);
+        
+        setLogs(prev => [...prev, {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          level: response.errors.length > 0 ? 'warn' : 'info',
+          message: `Scrape complete! Processed ${response.urls_processed} URLs, total reward: ${response.total_reward.toFixed(2)}`,
+          source: 'system',
+        }]);
+      },
+      // onError
+      (error, url) => {
+        setLogs(prev => [...prev, {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          message: `Error${url ? ` (${url})` : ''}: ${error}`,
+          source: 'scraper',
+        }]);
+      }
+    );
+  }, [taskInput]);
 
   // Stop task
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setIsRunning(false);
     setLogs(prev => [...prev, {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
       level: 'warn',
-      message: 'Episode stopped by user',
+      message: 'Scraping stopped by user',
       source: 'system',
     }]);
-  };
+  }, []);
+  
+  // Copy result to clipboard
+  const handleCopyResult = useCallback(() => {
+    if (scrapeResult?.output) {
+      navigator.clipboard.writeText(scrapeResult.output);
+      setLogs(prev => [...prev, {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'Result copied to clipboard',
+        source: 'system',
+      }]);
+    }
+  }, [scrapeResult]);
+  
+  // Download result
+  const handleDownloadResult = useCallback(() => {
+    if (scrapeResult?.output) {
+      const fileType =
+        scrapeResult.output_format === 'csv'
+          ? 'text/csv'
+          : scrapeResult.output_format === 'markdown'
+            ? 'text/markdown'
+            : 'application/json';
+      const extension =
+        scrapeResult.output_format === 'csv'
+          ? 'csv'
+          : scrapeResult.output_format === 'markdown'
+            ? 'md'
+            : scrapeResult.output_format === 'text'
+              ? 'txt'
+              : 'json';
+      const blob = new Blob([scrapeResult.output], { type: fileType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `scrape-result-${sessionId?.slice(0, 8) || 'unknown'}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  }, [scrapeResult, sessionId]);
 
   // Format time
   const formatTime = (isoString: string) => {
     return new Date(isoString).toLocaleTimeString('en-US', { hour12: false });
+  };
+
+  const safeHostname = (url: string) => {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return url;
+    }
   };
 
   // Log level colors
@@ -424,7 +616,7 @@ export const Dashboard: React.FC = () => {
   // ========== INPUT VIEW ==========
   if (currentView === 'input') {
     return (
-      <div className="h-[calc(100vh-64px)] flex flex-col bg-gray-900">
+      <div className="h-screen flex flex-col bg-slate-900">
         {/* System Status Banner */}
         {!isSystemOnline && (
           <div className="flex-shrink-0 px-4 py-2 bg-red-500/20 border-b border-red-500/30 flex items-center justify-center gap-2">
@@ -433,51 +625,65 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
         
-        {/* Main Content - ChatGPT-like interface */}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-auto">
-          <div className="w-full max-w-3xl space-y-6">
+        {/* Main Content - Full Screen Navy Blue Theme */}
+        <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-auto bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900/30">
+          <div className="w-full max-w-4xl space-y-8">
             {/* Header */}
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-white mb-2">ScrapeRL</h1>
-              <p className="text-gray-400">Enter your scraping task below</p>
+            <div className="text-center mb-12">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="p-3 bg-cyan-500/20 rounded-xl border border-cyan-500/30">
+                  <Zap className="w-8 h-8 text-cyan-400" />
+                </div>
+              </div>
+              <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">ScrapeRL</h1>
+              <p className="text-lg text-cyan-300/70">AI-Powered Intelligent Web Scraping</p>
             </div>
 
-            {/* URLs Section */}
-            <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Link className="w-4 h-4 text-cyan-400" />
-                <span className="text-sm font-medium text-white">Target URLs</span>
+            {/* Assets Section */}
+            <div className="bg-slate-800/60 backdrop-blur-sm border border-cyan-500/20 rounded-2xl p-6 shadow-xl shadow-cyan-500/5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-cyan-500/20 rounded-lg">
+                  <Link className="w-5 h-5 text-cyan-400" />
+                </div>
+                <span className="text-lg font-semibold text-white">Assets</span>
+                <Badge variant="info" size="sm">{taskInput.urls.length} URLs</Badge>
               </div>
               
               {/* URL Input */}
-              <div className="flex gap-2 mb-3">
+              <div className="flex gap-3 mb-4">
                 <input
-                  type="url"
-                  placeholder="https://example.com/page-to-scrape"
+                  type="text"
+                  placeholder="Enter URL (e.g., https://example.com)"
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddUrl()}
-                  className="flex-1 px-4 py-2.5 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  className="flex-1 px-4 py-3 bg-slate-900/70 border border-cyan-500/30 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all"
                 />
                 <button
                   onClick={handleAddUrl}
-                  className="px-4 py-2.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-400 rounded-lg transition-colors"
+                  disabled={!newUrl.trim()}
+                  className="px-5 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:bg-slate-700/50 border border-cyan-500/30 disabled:border-slate-600 text-cyan-400 disabled:text-slate-500 rounded-xl font-medium transition-all flex items-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
+                  Add
                 </button>
               </div>
               
               {/* URL List */}
               {taskInput.urls.length > 0 && (
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {taskInput.urls.map((url, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-3 py-2 bg-gray-900/50 rounded-lg">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <Globe className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                        <span className="text-sm text-gray-300 truncate">{url}</span>
-                      </div>
-                      <button onClick={() => handleRemoveUrl(url)} className="p-1 text-gray-500 hover:text-red-400">
-                        <X className="w-4 h-4" />
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                  {taskInput.urls.map((url, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 px-3 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 rounded-lg text-sm group hover:bg-cyan-500/20 transition-colors"
+                    >
+                      <Globe className="w-4 h-4 text-cyan-400" />
+                      <span className="max-w-[200px] truncate">{url}</span>
+                      <button
+                        onClick={() => handleRemoveUrl(url)}
+                        className="p-1 opacity-50 group-hover:opacity-100 hover:text-red-400 transition-all"
+                      >
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
@@ -485,55 +691,59 @@ export const Dashboard: React.FC = () => {
               )}
             </div>
 
-            {/* Instructions */}
-            <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <MessageSquare className="w-4 h-4 text-purple-400" />
-                <span className="text-sm font-medium text-white">Instructions</span>
+            {/* Instructions Section */}
+            <div className="bg-slate-800/60 backdrop-blur-sm border border-cyan-500/20 rounded-2xl p-6 shadow-xl shadow-cyan-500/5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-purple-500/20 rounded-lg">
+                  <MessageSquare className="w-5 h-5 text-purple-400" />
+                </div>
+                <span className="text-lg font-semibold text-white">Instructions</span>
               </div>
               <textarea
-                placeholder="What data do you want to extract? Be specific about the fields and structure..."
+                placeholder="What should I extract? (e.g., Extract all product names, prices, and descriptions from the page)"
                 value={taskInput.instruction}
                 onChange={(e) => setTaskInput(p => ({ ...p, instruction: e.target.value }))}
                 rows={3}
-                className="w-full px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none"
+                className="w-full px-4 py-3 bg-slate-900/70 border border-purple-500/30 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none transition-all"
               />
             </div>
 
             {/* Output Instructions */}
-            <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-medium text-white">Output Format</span>
+            <div className="bg-slate-800/60 backdrop-blur-sm border border-cyan-500/20 rounded-2xl p-6 shadow-xl shadow-cyan-500/5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-emerald-500/20 rounded-lg">
+                  <FileText className="w-5 h-5 text-emerald-400" />
+                </div>
+                <span className="text-lg font-semibold text-white">Output Format</span>
               </div>
               <textarea
-                placeholder="How should the output be formatted? (e.g., JSON with fields: name, price, description)"
+                placeholder="How should the output be formatted? (e.g., JSON with fields: name, price, description, url)"
                 value={taskInput.outputInstruction}
                 onChange={(e) => setTaskInput(p => ({ ...p, outputInstruction: e.target.value }))}
                 rows={2}
-                className="w-full px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none"
+                className="w-full px-4 py-3 bg-slate-900/70 border border-emerald-500/30 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 resize-none transition-all"
               />
             </div>
 
             {/* Configuration Options */}
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-4">
               {/* Model */}
               <button
                 onClick={() => setShowModelPopup(true)}
-                className="px-4 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                className="px-5 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/5"
               >
                 <Cpu className="w-4 h-4" />
-                {taskInput.selectedModel ? taskInput.selectedModel.split('/')[1] : 'Model'}
+                {taskInput.selectedModel ? taskInput.selectedModel.split('/')[1] : 'Select Model'}
               </button>
               
               {/* Vision */}
               <button
                 onClick={() => setShowVisionPopup(true)}
                 className={classNames(
-                  'px-4 py-2 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
+                  'px-5 py-3 border rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-lg',
                   taskInput.selectedVisionModel 
-                    ? 'bg-pink-500/10 border-pink-500/30 text-pink-400' 
-                    : 'bg-gray-700/50 border-gray-600 text-gray-400 hover:border-pink-500/30 hover:text-pink-400'
+                    ? 'bg-pink-500/10 border-pink-500/30 text-pink-400 shadow-pink-500/5' 
+                    : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-pink-500/30 hover:text-pink-400'
                 )}
               >
                 <Eye className="w-4 h-4" />
@@ -543,7 +753,7 @@ export const Dashboard: React.FC = () => {
               {/* Agents */}
               <button
                 onClick={() => setShowAgentPopup(true)}
-                className="px-4 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                className="px-5 py-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-purple-500/5"
               >
                 <Bot className="w-4 h-4" />
                 Agents {taskInput.selectedAgents.length > 0 && `(${taskInput.selectedAgents.length})`}
@@ -552,7 +762,7 @@ export const Dashboard: React.FC = () => {
               {/* Plugins */}
               <button
                 onClick={() => setShowPluginPopup(true)}
-                className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                className="px-5 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-amber-500/5"
               >
                 <Plug className="w-4 h-4" />
                 Plugins {taskInput.enabledPlugins.length > 0 && `(${taskInput.enabledPlugins.length})`}
@@ -562,10 +772,10 @@ export const Dashboard: React.FC = () => {
               <button
                 onClick={() => setShowTaskTypePopup(true)}
                 className={classNames(
-                  'px-4 py-2 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
-                  taskInput.taskType === 'low' && 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-                  taskInput.taskType === 'medium' && 'bg-amber-500/10 border-amber-500/30 text-amber-400',
-                  taskInput.taskType === 'high' && 'bg-red-500/10 border-red-500/30 text-red-400'
+                  'px-5 py-3 border rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-lg',
+                  taskInput.taskType === 'low' && 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/5',
+                  taskInput.taskType === 'medium' && 'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-amber-500/5',
+                  taskInput.taskType === 'high' && 'bg-red-500/10 border-red-500/30 text-red-400 shadow-red-500/5'
                 )}
               >
                 <Target className="w-4 h-4" />
@@ -574,13 +784,13 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* Start Button */}
-            <div className="flex justify-center pt-4">
+            <div className="flex justify-center pt-6">
               <button
                 onClick={handleStart}
                 disabled={taskInput.urls.length === 0 || !isSystemOnline}
-                className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 shadow-lg shadow-emerald-500/20"
+                className="px-10 py-4 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white rounded-2xl font-semibold text-lg transition-all flex items-center gap-3 shadow-xl shadow-cyan-500/30 disabled:shadow-none transform hover:scale-[1.02] disabled:hover:scale-100"
               >
-                <Play className="w-5 h-5" />
+                <Play className="w-6 h-6" />
                 Start Scraping
               </button>
             </div>
@@ -863,7 +1073,7 @@ export const Dashboard: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         {asset.type === 'url' && <Link className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
-                        {asset.type === 'image' && <Image className="w-4 h-4 text-pink-400 flex-shrink-0" />}
+                        {asset.type === 'image' && <ImageIcon className="w-4 h-4 text-pink-400 flex-shrink-0" />}
                         {asset.type === 'file' && <FileText className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                         {asset.type === 'data' && <Database className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
                         <span className="text-sm text-gray-300 truncate">{asset.name}</span>
@@ -898,34 +1108,51 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col">
+    <div className="h-screen flex flex-col bg-slate-900">
       {/* Main 3-Column Layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar - Active Components */}
-        <div className="w-56 flex-shrink-0 bg-gray-800/30 border-r border-gray-700/50 overflow-y-auto p-2 space-y-2">
+        <div className="w-56 flex-shrink-0 bg-slate-800/50 border-r border-cyan-500/10 overflow-y-auto p-3 space-y-3">
           {/* Back to Input */}
           <button
-            onClick={() => setCurrentView('input')}
-            className="w-full flex items-center gap-2 px-3 py-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            onClick={() => { setCurrentView('input'); handleStop(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-xl text-sm text-slate-300 transition-all"
           >
             <ChevronRight className="w-4 h-4 rotate-180" />
             New Task
           </button>
 
+          {/* Progress Bar */}
+          {isRunning && progress.totalUrls > 0 && (
+            <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-cyan-400 font-medium">Progress</span>
+                <span className="text-xs text-cyan-300">{progress.urlIndex + 1}/{progress.totalUrls}</span>
+              </div>
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 transition-all duration-500"
+                  style={{ width: `${((progress.urlIndex + 1) / progress.totalUrls) * 100}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 truncate">{progress.currentUrl}</p>
+            </div>
+          )}
+
           {/* Agents */}
           <Accordion title="Agents" icon={Bot} badge={taskInput.selectedAgents.length} color="text-purple-400" defaultOpen>
             {taskInput.selectedAgents.length === 0 ? (
-              <p className="text-xs text-gray-500 p-2">No agents selected</p>
+              <p className="text-xs text-slate-500 p-2">No agents selected</p>
             ) : (
               taskInput.selectedAgents.map((agentId) => {
                 const agent = agents.find(a => a.type === agentId);
                 return (
                   <div key={agentId} className="flex items-center justify-between p-2 bg-purple-500/10 border border-purple-500/30 rounded-lg">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                      <div className={`w-2 h-2 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></div>
                       <span className="text-xs text-white">{agent?.name || agentId}</span>
                     </div>
-                    <button onClick={() => showInfo(agent?.name || agentId, agent?.description || '', { Type: agentId })} className="text-gray-500 hover:text-gray-300">
+                    <button onClick={() => showInfo(agent?.name || agentId, agent?.description || '', { Type: agentId })} className="text-slate-500 hover:text-slate-300">
                       <Info className="w-3 h-3" />
                     </button>
                   </div>
@@ -934,125 +1161,85 @@ export const Dashboard: React.FC = () => {
             )}
           </Accordion>
 
-          {/* MCPs */}
-          <Accordion title="MCPs" icon={Wrench} badge={taskInput.enabledPlugins.filter(p => installedPlugins.mcps?.some((m: PluginInfo) => m.id === p)).length} color="text-amber-400">
-            {installedPlugins.mcps?.filter((p: PluginInfo) => taskInput.enabledPlugins.includes(p.id)).map((plugin: PluginInfo) => (
-              <div key={plugin.id} className="flex items-center justify-between p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                <span className="text-xs text-white">{plugin.name}</span>
-                <button onClick={() => showInfo(plugin.name, plugin.description)} className="text-gray-500 hover:text-gray-300">
-                  <Info className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-            {!installedPlugins.mcps?.some((p: PluginInfo) => taskInput.enabledPlugins.includes(p.id)) && (
-              <p className="text-xs text-gray-500 p-2">No MCPs enabled</p>
-            )}
-          </Accordion>
-
-          {/* Skills */}
-          <Accordion title="Skills" icon={Zap} badge={taskInput.enabledPlugins.filter(p => installedPlugins.skills?.some((s: PluginInfo) => s.id === p)).length} color="text-cyan-400">
-            {installedPlugins.skills?.filter((p: PluginInfo) => taskInput.enabledPlugins.includes(p.id)).map((plugin: PluginInfo) => (
-              <div key={plugin.id} className="flex items-center justify-between p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
-                <span className="text-xs text-white">{plugin.name}</span>
-                <button onClick={() => showInfo(plugin.name, plugin.description)} className="text-gray-500 hover:text-gray-300">
-                  <Info className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-            {!installedPlugins.skills?.some((p: PluginInfo) => taskInput.enabledPlugins.includes(p.id)) && (
-              <p className="text-xs text-gray-500 p-2">No skills enabled</p>
-            )}
-          </Accordion>
-
-          {/* APIs */}
-          <Accordion title="APIs" icon={Plug} badge={taskInput.enabledPlugins.filter(p => installedPlugins.apis?.some((a: PluginInfo) => a.id === p)).length} color="text-emerald-400">
-            {installedPlugins.apis?.filter((p: PluginInfo) => taskInput.enabledPlugins.includes(p.id)).map((plugin: PluginInfo) => (
-              <div key={plugin.id} className="flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                <span className="text-xs text-white">{plugin.name}</span>
-                <button onClick={() => showInfo(plugin.name, plugin.description)} className="text-gray-500 hover:text-gray-300">
-                  <Info className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-            {!installedPlugins.apis?.some((p: PluginInfo) => taskInput.enabledPlugins.includes(p.id)) && (
-              <p className="text-xs text-gray-500 p-2">No APIs enabled</p>
-            )}
-          </Accordion>
-
-          {/* Vision */}
-          <Accordion title="Vision" icon={Eye} badge={taskInput.selectedVisionModel ? 1 : 0} color="text-pink-400">
-            {taskInput.selectedVisionModel ? (
-              <div className="p-2 bg-pink-500/10 border border-pink-500/30 rounded-lg">
-                <span className="text-xs text-white">{taskInput.selectedVisionModel}</span>
-              </div>
+          {/* Plugins */}
+          <Accordion title="Plugins" icon={Plug} badge={taskInput.enabledPlugins.length} color="text-amber-400">
+            {taskInput.enabledPlugins.length === 0 ? (
+              <p className="text-xs text-slate-500 p-2">No plugins enabled</p>
             ) : (
-              <p className="text-xs text-gray-500 p-2">No vision model</p>
+              taskInput.enabledPlugins.map((pluginId) => (
+                <div key={pluginId} className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <span className="text-xs text-white">{pluginId}</span>
+                </div>
+              ))
             )}
           </Accordion>
 
           {/* System Status */}
-          <div className="mt-4 p-3 bg-gray-900/50 border border-gray-700/50 rounded-lg">
+          <div className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400">Status</span>
+              <span className="text-xs text-slate-400">Status</span>
               <Badge variant={isSystemOnline ? 'success' : 'error'} size="sm">
-                {isSystemOnline ? 'Online' : 'Offline'}
+                {isRunning ? 'Running' : isSystemOnline ? 'Online' : 'Offline'}
               </Badge>
             </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-400">Model</span>
+              <span className="text-xs text-cyan-300">{taskInput.selectedModel.split('/')[1]}</span>
+            </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Model</span>
-              <span className="text-xs text-gray-300">{taskInput.selectedModel.split('/')[1]}</span>
+              <span className="text-xs text-slate-400">Complexity</span>
+              <span className={classNames(
+                'text-xs',
+                taskInput.taskType === 'low' ? 'text-emerald-400' :
+                taskInput.taskType === 'medium' ? 'text-amber-400' : 'text-red-400'
+              )}>{taskInput.taskType.toUpperCase()}</span>
             </div>
           </div>
         </div>
 
         {/* Center Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800/50 to-cyan-900/10">
           {/* Stats Header - Session-based, start at 0 */}
-          <div className="flex-shrink-0 p-3 bg-gray-800/30 border-b border-gray-700/50">
+          <div className="flex-shrink-0 p-4 bg-slate-800/30 border-b border-cyan-500/10">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-emerald-500/20 rounded">
-                    <Layers className="w-4 h-4 text-emerald-400" />
+              <div className="flex items-center gap-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-cyan-500/20 rounded-lg">
+                    <Layers className="w-5 h-5 text-cyan-400" />
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-white">{stats.episodes}</p>
-                    <p className="text-[10px] text-gray-500">Episodes</p>
+                    <p className="text-2xl font-bold text-white">{stats.episodes}</p>
+                    <p className="text-xs text-slate-500">Episodes</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-cyan-500/20 rounded">
-                    <Target className="w-4 h-4 text-cyan-400" />
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500/20 rounded-lg">
+                    <Target className="w-5 h-5 text-purple-400" />
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-white">{stats.steps}</p>
-                    <p className="text-[10px] text-gray-500">Steps</p>
+                    <p className="text-2xl font-bold text-white">{stats.steps}</p>
+                    <p className="text-xs text-slate-500">Steps</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-purple-500/20 rounded">
-                    <TrendingUp className="w-4 h-4 text-purple-400" />
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500/20 rounded-lg">
+                    <TrendingUp className="w-5 h-5 text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-white">{stats.avgReward.toFixed(1)}</p>
-                    <p className="text-[10px] text-gray-500">Avg Reward</p>
+                    <p className="text-2xl font-bold text-white">{stats.totalReward.toFixed(2)}</p>
+                    <p className="text-xs text-slate-500">Total Reward</p>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-sm font-mono text-white">{new Date().toLocaleTimeString()}</p>
-                  <p className="text-[10px] text-gray-500">Current Time</p>
-                </div>
-                
                 {/* Control Buttons */}
                 {isRunning ? (
                   <button
                     onClick={handleStop}
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                    className="px-6 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium transition-all flex items-center gap-2 shadow-lg shadow-red-500/20"
                   >
                     <Pause className="w-4 h-4" />
                     Stop
@@ -1061,7 +1248,7 @@ export const Dashboard: React.FC = () => {
                   <button
                     onClick={handleStart}
                     disabled={taskInput.urls.length === 0}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                    className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 disabled:from-slate-600 disabled:to-slate-700 text-white rounded-xl font-medium transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/20"
                   >
                     <Play className="w-4 h-4" />
                     Start
@@ -1073,75 +1260,150 @@ export const Dashboard: React.FC = () => {
 
           {/* Main Visualization Area */}
           <div className="flex-1 overflow-y-auto p-4">
-            <div className="h-full bg-gray-900/50 border border-gray-700/50 rounded-xl p-4">
+            <div className="h-full bg-slate-900/50 border border-cyan-500/10 rounded-2xl p-4">
               {isRunning ? (
                 <div className="h-full flex flex-col">
                   {/* Current Action */}
                   <div className="flex-shrink-0 mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
-                      <span className="text-sm font-medium text-white">Current Action</span>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Activity className="w-5 h-5 text-cyan-400 animate-pulse" />
+                      <span className="text-sm font-semibold text-white">Current Step</span>
                     </div>
-                    <div className="p-3 bg-gray-800/50 rounded-lg">
-                      <p className="text-sm text-gray-300">Processing URLs...</p>
-                      <p className="text-xs text-gray-500 mt-1">Agent: {taskInput.selectedAgents[0] || 'None'} | URLs: {taskInput.urls.length}</p>
-                    </div>
+                    {currentStep ? (
+                      <div className="p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant={currentStep.status === 'completed' ? 'success' : currentStep.status === 'failed' ? 'error' : 'info'} size="sm">
+                            {currentStep.action.toUpperCase()}
+                          </Badge>
+                          <span className="text-xs text-cyan-300">Step {currentStep.step_number}</span>
+                        </div>
+                        <p className="text-sm text-white mb-2">{currentStep.message}</p>
+                        <div className="flex items-center gap-4 text-xs text-slate-400">
+                          <span>Reward: <span className="text-emerald-400">{currentStep.reward.toFixed(2)}</span></span>
+                          {currentStep.duration_ms && <span>Duration: {currentStep.duration_ms.toFixed(0)}ms</span>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-slate-800/50 rounded-xl">
+                        <p className="text-sm text-slate-400">Initializing...</p>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Observation Preview */}
+                  {/* Extracted Data Preview */}
                   <div className="flex-1 overflow-auto">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Globe className="w-4 h-4 text-cyan-400" />
-                      <span className="text-sm font-medium text-white">Page Observation</span>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Database className="w-5 h-5 text-emerald-400" />
+                      <span className="text-sm font-semibold text-white">Extracted Data</span>
                     </div>
-                    <div className="p-3 bg-gray-800/50 rounded-lg min-h-[200px]">
-                      <pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap">
-{`{
-  "urls": ${JSON.stringify(taskInput.urls.slice(0, 3))},
-  "instruction": "${taskInput.instruction.slice(0, 50)}...",
-  "status": "processing",
-  "elements": [],
-  "extracted_data": []
-}`}
+                    <div className="p-4 bg-slate-800/50 rounded-xl min-h-[200px] max-h-[400px] overflow-auto">
+                      <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap">
+                        {Object.keys(extractedData).length > 0 
+                          ? JSON.stringify(extractedData, null, 2)
+                          : '{\n  "status": "extracting...",\n  "data": []\n}'
+                        }
                       </pre>
                     </div>
                   </div>
                 </div>
+              ) : scrapeResult ? (
+                <div className="h-full flex flex-col">
+                  {/* Result Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${scrapeResult.status === 'completed' ? 'bg-emerald-500/20' : 'bg-amber-500/20'}`}>
+                        {scrapeResult.status === 'completed' ? (
+                          <Check className="w-6 h-6 text-emerald-400" />
+                        ) : (
+                          <AlertCircle className="w-6 h-6 text-amber-400" />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">Scraping Complete</h3>
+                        <p className="text-sm text-slate-400">
+                          {scrapeResult.urls_processed} URLs • {scrapeResult.total_steps} steps • {scrapeResult.duration_seconds.toFixed(1)}s
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCopyResult}
+                        className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-400 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy
+                      </button>
+                      <button
+                        onClick={handleDownloadResult}
+                        className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Result Content */}
+                  <div className="flex-1 overflow-auto p-4 bg-slate-800/50 rounded-xl">
+                    <pre className="text-sm text-slate-300 font-mono whitespace-pre-wrap">
+                      {scrapeResult.output}
+                    </pre>
+                  </div>
+
+                  {/* Errors */}
+                  {scrapeResult.errors.length > 0 && (
+                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                      <h4 className="text-sm font-medium text-red-400 mb-2">Errors ({scrapeResult.errors.length})</h4>
+                      {scrapeResult.errors.map((err, idx) => (
+                        <p key={idx} className="text-xs text-red-300">{err}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center">
-                  <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4">
-                    <Play className="w-8 h-8 text-gray-500" />
+                  <div className="w-20 h-20 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20">
+                    <Globe className="w-10 h-10 text-cyan-400" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-300 mb-2">Ready to Start</h3>
-                  <p className="text-sm text-gray-500 max-w-md">
+                  <h3 className="text-xl font-semibold text-white mb-2">Ready to Scrape</h3>
+                  <p className="text-sm text-slate-400 max-w-md mb-4">
                     {taskInput.urls.length} URLs loaded. Click Start to begin scraping.
                   </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {taskInput.urls.slice(0, 3).map((url, idx) => (
+                      <Badge key={idx} variant="info" size="sm">{safeHostname(url)}</Badge>
+                    ))}
+                    {taskInput.urls.length > 3 && (
+                      <Badge variant="neutral" size="sm">+{taskInput.urls.length - 3} more</Badge>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
           {/* Logs Terminal */}
-          <div className="flex-shrink-0 h-32 bg-gray-900 border-t border-gray-700/50">
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-800">
+          <div className="flex-shrink-0 h-36 bg-slate-900 border-t border-cyan-500/10">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-gray-500" />
-                <span className="text-xs font-medium text-gray-400">Logs</span>
+                <Terminal className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-medium text-slate-300">Live Logs</span>
+                {isRunning && <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>}
               </div>
-              <button onClick={() => setLogs([])} className="text-xs text-gray-500 hover:text-gray-300">
+              <button onClick={() => setLogs([])} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
                 Clear
               </button>
             </div>
-            <div className="h-[calc(100%-28px)] overflow-y-auto p-2 font-mono text-xs">
+            <div className="h-[calc(100%-32px)] overflow-y-auto p-3 font-mono text-xs">
               {logs.length === 0 ? (
-                <p className="text-gray-600 p-2">No logs yet...</p>
+                <p className="text-slate-600">Waiting for logs...</p>
               ) : (
-                logs.map((log) => (
+                logs.slice(-50).map((log) => (
                   <div key={log.id} className="flex items-start gap-2 py-0.5">
-                    <span className="text-gray-600">[{formatTime(log.timestamp)}]</span>
+                    <span className="text-slate-600">[{formatTime(log.timestamp)}]</span>
                     <span className={getLogLevelColor(log.level)}>[{log.level.toUpperCase()}]</span>
                     {log.source && <span className="text-purple-400">[{log.source}]</span>}
-                    <span className="text-gray-300">{log.message}</span>
+                    <span className="text-slate-300">{log.message}</span>
                   </div>
                 ))
               )}
@@ -1150,90 +1412,88 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-64 flex-shrink-0 bg-gray-800/30 border-l border-gray-700/50 overflow-y-auto p-3 space-y-3">
+        <div className="w-72 flex-shrink-0 bg-slate-800/50 border-l border-cyan-500/10 overflow-y-auto p-4 space-y-4">
           {/* Input Summary */}
-          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-3">
+          <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-cyan-400" />
-                <span className="text-sm font-medium text-white">Input</span>
+                <FileText className="w-5 h-5 text-cyan-400" />
+                <span className="text-sm font-semibold text-white">Task Input</span>
               </div>
               <button
                 onClick={() => setCurrentView('input')}
-                className="text-xs text-cyan-400 hover:text-cyan-300"
+                className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
               >
                 Edit
               </button>
             </div>
-            <div className="space-y-2 text-xs">
+            <div className="space-y-3 text-sm">
               <div>
-                <p className="text-gray-500">URLs ({taskInput.urls.length})</p>
-                <p className="text-gray-300 truncate">{taskInput.urls[0] || 'None'}</p>
+                <p className="text-slate-500 text-xs mb-1">URLs ({taskInput.urls.length})</p>
+                <p className="text-slate-300 truncate">{taskInput.urls[0] || 'None'}</p>
               </div>
               <div>
-                <p className="text-gray-500">Instruction</p>
-                <p className="text-gray-300 truncate">{taskInput.instruction || 'None'}</p>
+                <p className="text-slate-500 text-xs mb-1">Instruction</p>
+                <p className="text-slate-300 line-clamp-2">{taskInput.instruction || 'None'}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs mb-1">Output Format</p>
+                <p className="text-slate-300 truncate">{taskInput.outputInstruction || 'JSON'}</p>
               </div>
             </div>
           </div>
 
           {/* Memories */}
-          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-3">
+          <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-purple-400" />
-                <span className="text-sm font-medium text-white">Memories</span>
+                <Database className="w-5 h-5 text-purple-400" />
+                <span className="text-sm font-semibold text-white">Memory</span>
               </div>
               <button onClick={() => setShowMemoriesPopup(true)} className="text-xs text-purple-400 hover:text-purple-300">
-                View All
+                Manage
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-center">
-              <div className="p-2 bg-gray-800/50 rounded">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 bg-slate-800/50 rounded-lg text-center">
                 <p className="text-lg font-bold text-emerald-400">{memoryData?.short_term_count || 0}</p>
-                <p className="text-[10px] text-gray-500">Short</p>
+                <p className="text-[10px] text-slate-500">Short-term</p>
               </div>
-              <div className="p-2 bg-gray-800/50 rounded">
+              <div className="p-3 bg-slate-800/50 rounded-lg text-center">
                 <p className="text-lg font-bold text-cyan-400">{memoryData?.working_count || 0}</p>
-                <p className="text-[10px] text-gray-500">Working</p>
+                <p className="text-[10px] text-slate-500">Working</p>
               </div>
-              <div className="p-2 bg-gray-800/50 rounded">
+              <div className="p-3 bg-slate-800/50 rounded-lg text-center">
                 <p className="text-lg font-bold text-purple-400">{memoryData?.long_term_count || 0}</p>
-                <p className="text-[10px] text-gray-500">Long</p>
+                <p className="text-[10px] text-slate-500">Long-term</p>
               </div>
-              <div className="p-2 bg-gray-800/50 rounded">
-                <p className="text-lg font-bold text-amber-400">{memoryData?.shared_count || 0}</p>
-                <p className="text-[10px] text-gray-500">Shared</p>
+              <div className="p-3 bg-slate-800/50 rounded-lg text-center">
+                <p className="text-lg font-bold text-amber-400">{memories.length}</p>
+                <p className="text-[10px] text-slate-500">Session</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowMemoriesPopup(true)}
-              className="w-full mt-2 px-2 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded text-xs flex items-center justify-center gap-1"
-            >
-              <Plus className="w-3 h-3" /> Add Memory
-            </button>
           </div>
 
           {/* Assets */}
-          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-3">
+          <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <FolderOpen className="w-4 h-4 text-amber-400" />
-                <span className="text-sm font-medium text-white">Assets</span>
+                <FolderOpen className="w-5 h-5 text-amber-400" />
+                <span className="text-sm font-semibold text-white">Assets</span>
               </div>
               <Badge variant="neutral" size="sm">{assets.length}</Badge>
             </div>
             
             {assets.length === 0 ? (
-              <p className="text-center py-4 text-gray-500 text-xs">No assets yet</p>
+              <p className="text-center py-4 text-slate-500 text-xs">No assets yet</p>
             ) : (
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              <div className="space-y-2 max-h-40 overflow-y-auto">
                 {assets.slice(0, 5).map((asset) => (
-                  <div key={asset.id} className="flex items-center justify-between p-2 bg-gray-800/50 rounded text-xs">
+                  <div key={asset.id} className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg text-xs">
                     <div className="flex items-center gap-2 min-w-0">
                       {asset.type === 'url' && <Link className="w-3 h-3 text-cyan-400 flex-shrink-0" />}
                       {asset.type === 'data' && <Database className="w-3 h-3 text-emerald-400 flex-shrink-0" />}
-                      <span className="text-gray-300 truncate">{asset.name.slice(0, 30)}</span>
+                      <span className="text-slate-300 truncate">{asset.name.slice(0, 25)}</span>
                     </div>
                     <Badge variant={asset.source === 'ai' ? 'info' : 'neutral'} size="sm">{asset.source}</Badge>
                   </div>
@@ -1243,24 +1503,10 @@ export const Dashboard: React.FC = () => {
             
             <button
               onClick={() => setShowAssetsPopup(true)}
-              className="w-full mt-2 px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded text-xs"
+              className="w-full mt-3 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-lg text-xs font-medium transition-all"
             >
               View All Assets
             </button>
-          </div>
-
-          {/* Extracted Data */}
-          <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-medium text-white">Extracted Data</span>
-              </div>
-              <Badge variant="neutral" size="sm">0 items</Badge>
-            </div>
-            <div className="text-center py-4 text-gray-500 text-xs">
-              No data extracted yet.
-            </div>
           </div>
         </div>
       </div>

@@ -50,7 +50,7 @@ async def list_providers(router: SmartModelRouter = Depends(get_model_router)) -
     for provider_name in router.list_providers():
         provider_obj = router.providers.get(provider_name)
         if provider_obj:
-            models = provider_obj.list_models()
+            models = provider_obj.get_models()
             features = []
             
             # Check provider capabilities
@@ -97,7 +97,7 @@ async def get_provider_details(
             "available_providers": router.list_providers(),
         }
     
-    models = provider_obj.list_models()
+    models = provider_obj.get_models()
     
     return {
         "id": provider_name,

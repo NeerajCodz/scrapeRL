@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import agents, episode, health, memory, plugins, tasks, tools
+from app.api.routes import agents, episode, health, memory, plugins, tasks, tools, scrape
 from app.api.routes import settings as settings_routes
 from app.config import get_settings
 from app.memory.manager import MemoryManager
@@ -133,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix=api_prefix, tags=["Memory"])
     app.include_router(settings_routes.router, prefix=api_prefix, tags=["Settings"])
     app.include_router(plugins.router, prefix=api_prefix, tags=["Plugins"])
+    app.include_router(scrape.router, prefix=api_prefix, tags=["Scraping"])
     
     # Import and include providers router
     from app.api.routes import providers

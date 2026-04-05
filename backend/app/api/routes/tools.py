@@ -318,7 +318,7 @@ async def test_tool(request: ToolTestRequest) -> ToolTestResponse:
     summary="Get tool categories",
     description="Get all tool categories",
 )
-async def get_categories() -> dict[str, list[str]]:
+async def get_categories() -> dict[str, Any]:
     """
     Get all tool categories.
     
