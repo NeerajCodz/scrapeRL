@@ -270,6 +270,43 @@ def _list_session_artifacts(session: dict[str, Any]) -> list[str]:
     return sorted([file.name for file in base.iterdir() if file.is_file()])
 
 
+def _create_tool_call_step(
+    session: dict[str, Any],
+    tool_name: str,
+    description: str,
+    parameters: dict[str, Any],
+    status: str = "running",
+    result: dict[str, Any] | None = None,
+    reward: float = 0.0,
+    url: str | None = None,
+) -> dict[str, Any]:
+    """Create a tool call step event."""
+    step_number = len(session.get("steps", [])) + 1
+    message = f"{tool_name}({', '.join(f'{k}={repr(v)[:20]}' for k, v in parameters.items())})"
+    if status == "completed" and result:
+        result_preview = ", ".join(f"{k}={v}" for k, v in list(result.items())[:2])
+        message = f"{tool_name}() → {result_preview[:50]}"
+    
+    return _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_number,
+            action="tool_call",
+            url=url,
+            status=status,
+            message=message,
+            reward=reward,
+            extracted_data={
+                "tool_name": tool_name,
+                "tool_description": description,
+                "parameters": parameters,
+                **({"result": result} if result else {}),
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+
+
 def _record_step(session: dict[str, Any], step: ScrapeStep) -> dict[str, Any]:
     """Store and return a step event payload."""
 
@@ -1115,6 +1152,7 @@ async def _scrape_github_trending(
             stars = "0"
             if stars_elem:
                 stars_text = stars_elem.get_text(strip=True)
+                # Tool call: regex.sub (inline, no separate step for efficiency)
                 stars = re.sub(r"[^\d,.]", "", stars_text)
                 
             # Extract forks  
@@ -1122,6 +1160,7 @@ async def _scrape_github_trending(
             forks = "0"
             if forks_elem:
                 forks_text = forks_elem.get_text(strip=True) 
+                # Tool call: regex.sub (inline, no separate step for efficiency)
                 forks = re.sub(r"[^\d,.]", "", forks_text)
                 
             trending_repos.append({
@@ -2143,6 +2182,39 @@ async def scrape_stream(
         else:
             session["errors"].append(planner_sandbox.error or "Planner sandbox execution failed")
 
+    # Tool call: url.parse (validate and parse URLs)
+    url_parse_event = _create_tool_call_step(
+        session,
+        "url.parse",
+        "Parse and validate target URLs",
+        {"urls": resolved_assets, "count": len(resolved_assets)},
+        status="running",
+    )
+    await manager.broadcast(url_parse_event, session_id)
+    yield _sse_event(url_parse_event)
+    
+    parsed_urls = []
+    for url in resolved_assets:
+        parsed = urlparse(url)
+        parsed_urls.append({
+            "url": url,
+            "scheme": parsed.scheme,
+            "domain": parsed.netloc,
+            "path": parsed.path,
+        })
+    
+    url_parse_result = _create_tool_call_step(
+        session,
+        "url.parse",
+        "Parse and validate target URLs",
+        {"urls": resolved_assets},
+        status="completed",
+        result={"parsed": len(parsed_urls), "domains": list(set(p["domain"] for p in parsed_urls))},
+        reward=0.05,
+    )
+    await manager.broadcast(url_parse_result, session_id)
+    yield _sse_event(url_parse_result)
+
     for idx, url in enumerate(resolved_assets):
         session["current_url_index"] = idx
         url_navigation_plan = _create_intelligent_navigation_plan(request.instructions, [url])
@@ -2376,6 +2448,62 @@ async def scrape_stream(
             for source, payload in extracted_payload.items():
                 if isinstance(payload, dict) and isinstance(payload.get("content"), str):
                     html_samples[str(source)] = payload.get("content", "")
+
+        # Tool call: extract.urls (find URLs in content)
+        if html_samples:
+            extract_urls_event = _create_tool_call_step(
+                session,
+                "extract.urls",
+                "Extract URLs from HTML content",
+                {"sources": len(html_samples), "total_bytes": sum(len(h) for h in html_samples.values())},
+                status="running",
+            )
+            await manager.broadcast(extract_urls_event, session_id)
+            yield _sse_event(extract_urls_event)
+            
+            all_urls = []
+            for html in html_samples.values():
+                all_urls.extend(re.findall(r'href=["\']([^"\']+)["\']', html[:50000]))  # Limit search
+            
+            extract_urls_result = _create_tool_call_step(
+                session,
+                "extract.urls",
+                "Extract URLs from HTML content",
+                {"sources": len(html_samples)},
+                status="completed",
+                result={"urls_found": len(all_urls), "unique": len(set(all_urls))},
+                reward=0.05,
+            )
+            await manager.broadcast(extract_urls_result, session_id)
+            yield _sse_event(extract_urls_result)
+            
+            # Tool call: extract.emails (find emails in content)
+            extract_emails_event = _create_tool_call_step(
+                session,
+                "extract.emails",
+                "Extract email addresses from HTML content",
+                {"sources": len(html_samples)},
+                status="running",
+            )
+            await manager.broadcast(extract_emails_event, session_id)
+            yield _sse_event(extract_emails_event)
+            
+            all_emails = []
+            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+            for html in html_samples.values():
+                all_emails.extend(re.findall(email_pattern, html[:50000]))
+            
+            extract_emails_result = _create_tool_call_step(
+                session,
+                "extract.emails",
+                "Extract email addresses from HTML content",
+                {"sources": len(html_samples)},
+                status="completed",
+                result={"emails_found": len(all_emails), "unique": len(set(all_emails))},
+                reward=0.02,
+            )
+            await manager.broadcast(extract_emails_result, session_id)
+            yield _sse_event(extract_emails_result)
 
         analysis_payload = {
             "instructions": request.instructions,

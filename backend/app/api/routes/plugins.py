@@ -5,6 +5,16 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.plugins.registry import (
+    get_all_plugins,
+    get_all_tools,
+    get_plugin,
+    get_plugin_summary,
+    get_tool,
+    get_tools_by_category,
+    PluginCategory,
+)
+
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
 # Plugin registry - available plugins
@@ -402,8 +412,94 @@ async def get_categories() -> dict[str, Any]:
     }
 
 
+# ==============================================================================
+# Tool Registry Endpoints (must be before /{plugin_id} catch-all)
+# ==============================================================================
+
+
+@router.get("/tools")
+async def list_tools(category: str | None = None) -> dict[str, Any]:
+    """List all available tools from plugin registry."""
+    if category:
+        try:
+            cat = PluginCategory(category)
+            tools = get_tools_by_category(cat)
+        except ValueError:
+            tools = []
+    else:
+        tools = get_all_tools()
+    
+    return {
+        "tools": [
+            {
+                "name": t.name,
+                "description": t.description,
+                "category": t.category.value,
+                "parameters": t.parameters,
+                "returns": t.returns,
+            }
+            for t in tools
+        ],
+        "count": len(tools),
+    }
+
+
+@router.get("/tools/{tool_name:path}")
+async def get_tool_details(tool_name: str) -> dict[str, Any]:
+    """Get details about a specific tool."""
+    tool = get_tool(tool_name)
+    if not tool:
+        raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
+    
+    return {
+        "name": tool.name,
+        "description": tool.description,
+        "category": tool.category.value,
+        "parameters": tool.parameters,
+        "returns": tool.returns,
+        "examples": tool.examples,
+    }
+
+
+@router.get("/registry")
+async def get_registry_endpoint() -> dict[str, Any]:
+    """Get full plugin registry with all tools."""
+    plugins = get_all_plugins()
+    
+    return {
+        "plugins": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "category": p.category.value,
+                "version": p.version,
+                "enabled": p.enabled,
+                "tools": [
+                    {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters,
+                        "returns": t.returns,
+                    }
+                    for t in p.tools
+                ],
+                "tools_count": len(p.tools),
+            }
+            for p in plugins
+        ],
+        "summary": get_plugin_summary(),
+    }
+
+
+@router.get("/summary")
+async def get_summary_endpoint() -> dict[str, Any]:
+    """Get summary of plugins and tools."""
+    return get_plugin_summary()
+
+
 @router.get("/{plugin_id}")
-async def get_plugin(plugin_id: str) -> PluginResponse:
+async def get_plugin_by_id(plugin_id: str) -> PluginResponse:
     """Get details about a specific plugin."""
     for plugins in PLUGIN_REGISTRY.values():
         for plugin in plugins:
@@ -499,5 +595,3 @@ async def uninstall_plugin(action: PluginAction) -> dict[str, Any]:
         "message": f"Plugin {plugin['name']} uninstalled successfully",
         "plugin": {**plugin, "installed": False},
     }
-
-
