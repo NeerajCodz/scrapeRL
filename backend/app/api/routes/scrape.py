@@ -929,15 +929,21 @@ async def _scrape_github_trending(
     # Navigate to GitHub trending
     trending_url = "https://github.com/trending"
     
+    # Tool call: browser.navigate
     step_num += 1
     yield _record_step(
         session,
         ScrapeStep(
             step_number=step_num,
-            action="navigate", 
+            action="tool_call",
             url=trending_url,
             status="running",
-            message="Navigating to GitHub trending page...",
+            message=f"browser.navigate(url='{trending_url}')",
+            extracted_data={
+                "tool_name": "browser.navigate",
+                "tool_description": "Navigate browser to GitHub trending page",
+                "parameters": {"url": trending_url, "wait_for": "page_load"},
+            },
             timestamp=_now_iso(),
         ),
     )
@@ -954,6 +960,28 @@ async def _scrape_github_trending(
     nav_reward = 0.5 if nav_obs.page_html else 0.0
     total_reward += nav_reward
     
+    nav_success = bool(nav_obs.page_html)
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=trending_url,
+            status="completed" if nav_success else "failed",
+            message=f"browser.navigate() → {len(nav_obs.page_html) if nav_obs.page_html else 0} bytes",
+            reward=0.1,
+            extracted_data={
+                "tool_name": "browser.navigate",
+                "result": {
+                    "success": nav_success,
+                    "html_length": len(nav_obs.page_html) if nav_obs.page_html else 0,
+                    "status_code": 200 if nav_success else 0,
+                },
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
     # Update the navigation step with actual reward
     step_num += 1
     yield _record_step(
@@ -962,8 +990,8 @@ async def _scrape_github_trending(
             step_number=step_num,
             action="navigate",
             url=trending_url,
-            status="completed" if nav_obs.page_html else "failed",
-            message=f"Navigated to {trending_url}" if nav_obs.page_html else "Navigation failed",
+            status="completed" if nav_success else "failed",
+            message=f"Navigated to {trending_url}" if nav_success else "Navigation failed",
             reward=nav_reward,
             duration_ms=nav_info.get("step_duration_ms", 0),
             timestamp=_now_iso(),
@@ -974,8 +1002,82 @@ async def _scrape_github_trending(
         session["errors"].append("Failed to load GitHub trending page")
         return
         
-    # Parse trending repos from HTML
+    # Tool call: html.parse
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=trending_url,
+            status="running",
+            message="html.parse(content)",
+            extracted_data={
+                "tool_name": "html.parse",
+                "tool_description": "Parse HTML document into structured DOM",
+                "parameters": {"parser": "html.parser", "content_length": len(nav_obs.page_html)},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
     soup = parse_html(nav_obs.page_html)
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=trending_url,
+            status="completed",
+            message="html.parse() → DOM ready",
+            reward=0.05,
+            extracted_data={
+                "tool_name": "html.parse",
+                "result": {"parsed": True, "soup_type": "BeautifulSoup"},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Tool call: html.select
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=trending_url,
+            status="running",
+            message="html.select(selector='article.Box-row')",
+            extracted_data={
+                "tool_name": "html.select",
+                "tool_description": "Select repository elements from trending page",
+                "parameters": {"selector": "article.Box-row", "fallback": "div.Box-row"},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Find repository entries (GitHub trending structure)
+    repo_articles = soup.find_all("article", class_="Box-row") or soup.find_all("div", class_="Box-row")
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=trending_url,
+            status="completed",
+            message=f"html.select() → {len(repo_articles)} elements",
+            reward=0.1,
+            extracted_data={
+                "tool_name": "html.select",
+                "result": {"elements_found": len(repo_articles), "selector_used": "article.Box-row"},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
     
     step_num += 1
     yield _record_step(
@@ -990,9 +1092,6 @@ async def _scrape_github_trending(
             timestamp=_now_iso(),
         ),
     )
-    
-    # Find repository entries (GitHub trending structure)
-    repo_articles = soup.find_all("article", class_="Box-row") or soup.find_all("div", class_="Box-row")
     
     for article in repo_articles[:20]:  # Limit to first 20
         try:
@@ -1055,12 +1154,55 @@ async def _scrape_github_trending(
         ),
     )
     
+    # Tool call: csv.generate
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=trending_url,
+            status="running",
+            message="csv.generate(data, fields=['username', 'repo_name', 'stars', 'forks'])",
+            extracted_data={
+                "tool_name": "csv.generate",
+                "tool_description": "Generate CSV output from repository data",
+                "parameters": {
+                    "fields": ["username", "repo_name", "stars", "forks"],
+                    "row_count": len(trending_repos),
+                },
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
     # Generate clean CSV output
     csv_buffer = io.StringIO()
     writer = csv.DictWriter(csv_buffer, fieldnames=["username", "repo_name", "stars", "forks"])
     writer.writeheader()
     writer.writerows(trending_repos)
     clean_csv = csv_buffer.getvalue()
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=trending_url,
+            status="completed",
+            message=f"csv.generate() → {len(clean_csv)} bytes",
+            reward=0.1,
+            extracted_data={
+                "tool_name": "csv.generate",
+                "result": {
+                    "csv_length": len(clean_csv),
+                    "rows": len(trending_repos),
+                    "columns": 4,
+                },
+            },
+            timestamp=_now_iso(),
+        ),
+    )
     
     # Store the clean CSV directly as extracted data for CSV output format
     if request.output_format == OutputFormat.CSV:
@@ -1565,6 +1707,25 @@ async def _scrape_single_page(
         ),
     )
     
+    # Tool call: browser.navigate
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=url,
+            status="running",
+            message="browser.navigate(url)",
+            extracted_data={
+                "tool_name": "browser.navigate",
+                "tool_description": "Navigate browser to target URL",
+                "parameters": {"url": url},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
     navigate_action = Action(
         action_type=ActionType.NAVIGATE,
         parameters={"url": url},
@@ -1574,6 +1735,23 @@ async def _scrape_single_page(
     total_reward += reward
     
     nav_success = nav_info.get("action_result", {}).get("success", bool(nav_obs.page_html))
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=url,
+            status="completed" if nav_success else "failed",
+            message="browser.navigate(url) → success" if nav_success else "browser.navigate(url) → failed",
+            reward=0.05,
+            extracted_data={
+                "tool_name": "browser.navigate",
+                "result": {"success": nav_success, "html_length": len(nav_obs.page_html) if nav_obs.page_html else 0},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
     
     yield _record_step(
         session,
@@ -1598,14 +1776,20 @@ async def _scrape_single_page(
     
     for field_name in fields_to_extract:
         step_num += 1
+        # Tool call: html.extract
         yield _record_step(
             session,
             ScrapeStep(
                 step_number=step_num,
-                action="extract",
+                action="tool_call",
                 url=url,
                 status="running",
-                message=f"Extracting {field_name}...",
+                message=f"html.extract(field='{field_name}')",
+                extracted_data={
+                    "tool_name": "html.extract",
+                    "tool_description": f"Extract {field_name} from HTML document",
+                    "parameters": {"field_name": field_name},
+                },
                 timestamp=_now_iso(),
             ),
         )
@@ -1623,6 +1807,24 @@ async def _scrape_single_page(
                 if ef.field_name == field_name:
                     extracted[field_name] = ef.value
                     break
+        
+        value_preview = str(extracted.get(field_name, ""))[:100]
+        yield _record_step(
+            session,
+            ScrapeStep(
+                step_number=step_num,
+                action="tool_call",
+                url=url,
+                status="completed",
+                message=f"html.extract(field='{field_name}') → {value_preview}",
+                reward=0.05,
+                extracted_data={
+                    "tool_name": "html.extract",
+                    "result": {field_name: extracted.get(field_name)},
+                },
+                timestamp=_now_iso(),
+            ),
+        )
         
         yield _record_step(
             session,

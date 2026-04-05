@@ -64,6 +64,8 @@ const getStepIcon = (action: string): LucideIcon => {
     'complete': CheckCircle,
     'mcp_search': Search,
     'python_sandbox': Terminal,
+    'site_template': FileText,
+    'tool_call': Zap,
     'error': XCircle,
   };
   return iconMap[action] || Activity;
@@ -89,6 +91,8 @@ const getStepColor = (action: string, status: string): string => {
     'complete': 'text-green-400 bg-green-500/20 border-green-500/30',
     'mcp_search': 'text-cyan-400 bg-cyan-500/20 border-cyan-500/30',
     'python_sandbox': 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30',
+    'site_template': 'text-violet-400 bg-violet-500/20 border-violet-500/30',
+    'tool_call': 'text-yellow-300 bg-yellow-500/20 border-yellow-500/30',
   };
   return colorMap[action] || 'text-slate-400 bg-slate-500/20 border-slate-500/30';
 };
@@ -110,6 +114,13 @@ const StepAccordionItem: React.FC<StepAccordionItemProps> = ({ step, isExpanded,
   const Icon = getStepIcon(step.action);
   const colorClasses = getStepColor(step.action, step.status);
   
+  // Check if this is a tool call
+  const isToolCall = step.action === 'tool_call';
+  const toolName = (step.extracted_data?.tool_name as string) || '';
+  const toolDescription = (step.extracted_data?.tool_description as string) || '';
+  const toolParameters = (step.extracted_data?.parameters as Record<string, any>) || {};
+  const toolResult = (step.extracted_data?.result as Record<string, any>) || {};
+  
   return (
     <div className={classNames(
       'border rounded-lg overflow-hidden transition-all',
@@ -120,14 +131,14 @@ const StepAccordionItem: React.FC<StepAccordionItemProps> = ({ step, isExpanded,
         onClick={onToggle}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
       >
-        <div className="flex items-center gap-3">
-          <div className={classNames('p-2 rounded-lg', colorClasses.split(' ').slice(1, 3).join(' '))}>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className={classNames('p-2 rounded-lg flex-shrink-0', colorClasses.split(' ').slice(1, 3).join(' '))}>
             <Icon className={classNames('w-4 h-4', colorClasses.split(' ')[0])} />
           </div>
-          <div className="text-left">
+          <div className="text-left min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-white">
-                {step.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                {isToolCall ? toolName : step.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
               </span>
               <Badge 
                 variant={step.status === 'completed' ? 'success' : step.status === 'failed' ? 'error' : 'info'} 
@@ -136,10 +147,13 @@ const StepAccordionItem: React.FC<StepAccordionItemProps> = ({ step, isExpanded,
                 {step.status}
               </Badge>
             </div>
-            <p className="text-xs text-slate-400 truncate max-w-[300px]">{step.message}</p>
+            <p className="text-xs text-slate-400 truncate">{step.message}</p>
+            {isToolCall && toolDescription && (
+              <p className="text-[10px] text-slate-500 mt-0.5">{toolDescription}</p>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <div className="text-right">
             <span className="text-xs text-slate-500">Step {step.step_number}</span>
             {step.reward > 0 && (
@@ -156,6 +170,42 @@ const StepAccordionItem: React.FC<StepAccordionItemProps> = ({ step, isExpanded,
       
       {isExpanded && (
         <div className="px-4 py-3 border-t border-white/10 bg-slate-900/50 space-y-3">
+          {/* Tool Call Specific Details */}
+          {isToolCall && (
+            <>
+              <div className="bg-slate-800/50 rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-3 h-3 text-yellow-400" />
+                  <span className="text-xs font-semibold text-yellow-400">Tool Call Details</span>
+                </div>
+                
+                {toolDescription && (
+                  <div className="text-xs text-slate-300">
+                    <span className="text-slate-500">Description:</span> {toolDescription}
+                  </div>
+                )}
+                
+                {Object.keys(toolParameters).length > 0 && (
+                  <div>
+                    <span className="text-xs text-slate-500">Parameters:</span>
+                    <pre className="text-xs text-cyan-300 bg-slate-900/70 rounded p-2 mt-1 overflow-auto max-h-20 font-mono">
+                      {JSON.stringify(toolParameters, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                
+                {Object.keys(toolResult).length > 0 && (
+                  <div>
+                    <span className="text-xs text-slate-500">Result:</span>
+                    <pre className="text-xs text-emerald-300 bg-slate-900/70 rounded p-2 mt-1 overflow-auto max-h-20 font-mono">
+                      {JSON.stringify(toolResult, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          
           {/* Step Details */}
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div>
@@ -188,8 +238,8 @@ const StepAccordionItem: React.FC<StepAccordionItemProps> = ({ step, isExpanded,
             </div>
           </div>
           
-          {/* Extracted Data */}
-          {step.extracted_data && Object.keys(step.extracted_data).length > 0 && (
+          {/* Extracted Data (non-tool calls or if additional data exists) */}
+          {step.extracted_data && Object.keys(step.extracted_data).length > 0 && !isToolCall && (
             <div className="mt-3">
               <p className="text-xs text-slate-500 mb-2">Extracted Data:</p>
               <pre className="text-xs text-slate-300 bg-slate-800/50 rounded-lg p-3 overflow-auto max-h-40 font-mono">
