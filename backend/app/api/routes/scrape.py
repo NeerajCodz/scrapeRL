@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import json
 import logging
 import re
@@ -344,13 +346,73 @@ async def format_output(data: dict[str, Any], output_format: OutputFormat, _inst
 
 def _extract_fields_for_complexity(complexity: TaskComplexity) -> list[str]:
     """Map complexity level to extraction fields."""
-
+    
+    # For agentic scraping, we need to be goal-oriented
+    # These are basic fields, but the planner should navigate intelligently
     fields = ["title", "content", "links"]
     if complexity in (TaskComplexity.MEDIUM, TaskComplexity.HIGH):
         fields.extend(["meta", "images", "data"])
     if complexity == TaskComplexity.HIGH:
         fields.extend(["scripts", "forms", "tables"])
     return fields
+
+
+def _create_intelligent_navigation_plan(instructions: str, assets: list[str]) -> dict[str, Any]:
+    """Create an intelligent navigation plan based on user instructions."""
+    
+    instructions_lower = instructions.lower()
+    asset_url = assets[0] if assets else ""
+    
+    # GitHub trending repositories detection
+    if "trending" in instructions_lower and "repo" in instructions_lower and "github" in asset_url:
+        return {
+            "strategy": "github_trending",
+            "target_urls": [
+                "https://github.com/trending",
+                "https://github.com/trending?since=daily",
+                "https://github.com/trending?since=weekly"
+            ],
+            "navigation_steps": [
+                "Navigate to GitHub trending page",
+                "Extract trending repository information",
+                "Follow pagination if available", 
+                "Collect repository data: name, stars, forks, description"
+            ],
+            "extraction_goal": "trending_repositories",
+            "output_fields": ["username", "repo_name", "stars", "forks", "description"]
+        }
+    
+    # News articles detection
+    elif any(word in instructions_lower for word in ["news", "article", "headline"]):
+        return {
+            "strategy": "news_extraction",
+            "navigation_steps": [
+                "Navigate to main news page",
+                "Extract article headlines and summaries",
+                "Follow article links if needed"
+            ],
+            "extraction_goal": "news_articles",
+            "output_fields": ["headline", "summary", "publish_date", "author"]
+        }
+    
+    # General search/exploration
+    elif any(word in instructions_lower for word in ["search", "find", "explore", "all"]):
+        return {
+            "strategy": "intelligent_exploration", 
+            "navigation_steps": [
+                "Analyze main page for relevant navigation",
+                "Follow relevant links based on instructions",
+                "Extract data according to specified format"
+            ],
+            "extraction_goal": "custom_exploration"
+        }
+    
+    # Default single-page extraction
+    return {
+        "strategy": "single_page",
+        "navigation_steps": ["Extract content from provided URL"],
+        "extraction_goal": "basic_extraction"
+    }
 
 
 def _is_url_asset(asset: str) -> bool:
@@ -657,44 +719,199 @@ async def scrape_url(
                 ),
             )
 
-            if terminated or truncated:
-                break
-
-        python_plugin_ids = {
-            "mcp-python-sandbox",
-            "proc-python",
-            "proc-pandas",
-            "proc-numpy",
-            "proc-bs4",
-        }
-        if any(plugin_id in enabled_plugins for plugin_id in python_plugin_ids):
-            phase_code = (
-                "result = {"
-                "'phase': payload.get('phase'), "
-                "'url': payload.get('url'), "
-                "'extracted_fields': sorted(list((payload.get('extracted') or {}).keys()))"
-                "}"
+async def scrape_url_intelligently(
+    session: dict[str, Any],
+    session_id: str,
+    url: str,
+    settings: Settings,
+    request: ScrapeRequest,
+    memory_manager: MemoryManager,
+    enabled_plugins: list[str],
+    navigation_plan: dict[str, Any],
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Intelligent scraping that follows navigation plan."""
+    
+    episode_id = f"{session_id}-{uuid.uuid4().hex[:8]}"
+    
+    try:
+        env = create_environment(episode_id, settings)
+        await env.reset(task_id=f"scrape_{session_id}")
+        
+        step_num = 0
+        total_reward = 0.0
+        
+        # GitHub trending strategy
+        if navigation_plan["strategy"] == "github_trending":
+            yield from _scrape_github_trending(
+                session, session_id, env, request, navigation_plan, step_num, total_reward
             )
-            phase_payload = {
-                "phase": "extractor",
-                "url": url,
-                "extracted": extracted,
-            }
-            try:
-                phase_result = await asyncio.to_thread(
-                    execute_python_sandbox,
-                    phase_code,
-                    phase_payload,
-                    session_id=session_id,
-                    timeout_seconds=15,
-                )
-            except Exception as exc:
-                phase_result = SandboxExecutionResult(
-                    success=False,
-                    output=None,
-                    error=f"Extractor sandbox setup failed: {exc}",
-                )
-            if phase_result.success and phase_result.output is not None:
+        
+        # General exploration strategy  
+        elif navigation_plan["strategy"] == "intelligent_exploration":
+            yield from _scrape_with_exploration(
+                session, session_id, env, request, navigation_plan, url, step_num, total_reward
+            )
+            
+        # Default single page
+        else:
+            yield from _scrape_single_page(
+                session, session_id, env, request, url, step_num, total_reward
+            )
+            
+    except Exception as exc:
+        logger.error(f"Intelligent scraping failed for {url}: {exc}")
+        session["errors"].append(f"Scraping failed: {exc}")
+        
+
+async def _scrape_github_trending(
+    session: dict[str, Any],
+    session_id: str, 
+    env,
+    request: ScrapeRequest,
+    navigation_plan: dict[str, Any],
+    step_num: int,
+    total_reward: float,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Scrape GitHub trending repositories."""
+    
+    trending_repos = []
+    
+    # Navigate to GitHub trending
+    trending_url = "https://github.com/trending"
+    
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="navigate", 
+            url=trending_url,
+            status="running",
+            message="Navigating to GitHub trending page...",
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    navigate_action = Action(
+        action_type=ActionType.NAVIGATE,
+        parameters={"url": trending_url},
+        reasoning="Navigate to GitHub trending to find popular repositories",
+    )
+    
+    nav_obs, reward, _, _, _, nav_info = await env.step(navigate_action)
+    total_reward += reward
+    
+    if not nav_obs.page_html:
+        session["errors"].append("Failed to load GitHub trending page")
+        return
+        
+    # Parse trending repos from HTML
+    soup = parse_html(nav_obs.page_html)
+    
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="extract",
+            url=trending_url,
+            status="running", 
+            message="Extracting trending repositories...",
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Find repository entries (GitHub trending structure)
+    repo_articles = soup.find_all("article", class_="Box-row") or soup.find_all("div", class_="Box-row")
+    
+    for article in repo_articles[:20]:  # Limit to first 20
+        try:
+            # Extract repo name and username
+            title_link = article.find("h2") or article.find("h1") 
+            if not title_link:
+                continue
+                
+            link = title_link.find("a")
+            if not link:
+                continue
+                
+            repo_path = link.get("href", "").strip("/")
+            if "/" in repo_path:
+                username, repo_name = repo_path.split("/", 1)
+            else:
+                continue
+                
+            # Extract stars
+            stars_elem = article.find("a", href=lambda x: x and "stargazers" in x)
+            stars = "0"
+            if stars_elem:
+                stars_text = stars_elem.get_text(strip=True)
+                stars = re.sub(r"[^\d,.]", "", stars_text)
+                
+            # Extract forks  
+            forks_elem = article.find("a", href=lambda x: x and "forks" in x)
+            forks = "0"
+            if forks_elem:
+                forks_text = forks_elem.get_text(strip=True) 
+                forks = re.sub(r"[^\d,.]", "", forks_text)
+                
+            trending_repos.append({
+                "username": username,
+                "repo_name": repo_name, 
+                "stars": stars,
+                "forks": forks
+            })
+            
+        except Exception as exc:
+            logger.warning(f"Failed to parse repo entry: {exc}")
+            continue
+    
+    # Store results
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="complete",
+            url=trending_url,
+            status="completed",
+            message=f"Extracted {len(trending_repos)} trending repositories",
+            reward=total_reward + len(trending_repos) * 0.5,
+            extracted_data={"trending_repos": trending_repos},
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Format as CSV
+    if request.output_format == "csv" and trending_repos:
+        csv_buffer = io.StringIO()
+        writer = csv.DictWriter(csv_buffer, fieldnames=["username", "repo_name", "stars", "forks"])
+        writer.writeheader()
+        writer.writerows(trending_repos)
+        
+        session["final_output"] = csv_buffer.getvalue()
+        session["extracted_data"][trending_url] = {
+            "trending_repositories": trending_repos,
+            "csv_output": csv_buffer.getvalue()
+        }
+        
+        _write_session_artifact(session, "trending_repos.csv", csv_buffer.getvalue())
+
+
+async def _scrape_single_page(
+    session: dict[str, Any],
+    session_id: str,
+    env,
+    request: ScrapeRequest, 
+    url: str,
+    step_num: int,
+    total_reward: float,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Fallback to original single-page scraping."""
+    
+    # Use the original scrape_url logic for single pages
+    async for result in scrape_url(session, session_id, url, get_settings(), request, None, []):
+        yield result
                 step_num += 1
                 yield _record_step(
                     session,
@@ -781,6 +998,23 @@ async def scrape_url(
         remove_environment(episode_id)
 
 
+async def _scrape_with_exploration(
+    session: dict[str, Any],
+    session_id: str,
+    env,
+    request: ScrapeRequest,
+    navigation_plan: dict[str, Any],
+    url: str,
+    step_num: int,
+    total_reward: float,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Scrape with intelligent exploration based on instructions."""
+    
+    # For now, fallback to single page - this can be enhanced later
+    async for result in _scrape_single_page(session, session_id, env, request, url, step_num, total_reward):
+        yield result
+
+
 async def scrape_stream(
     session_id: str,
     request: ScrapeRequest,
@@ -808,6 +1042,9 @@ async def scrape_stream(
     await manager.broadcast(init_event, session_id)
     yield _sse_event(init_event)
 
+    # Create intelligent navigation plan based on instructions
+    navigation_plan = _create_intelligent_navigation_plan(request.instructions, request.assets)
+    
     plugin_event = _record_step(
         session,
         ScrapeStep(
@@ -817,7 +1054,13 @@ async def scrape_stream(
             message=(
                 f"Enabled plugins: {enabled_plugins}" if enabled_plugins else "No plugins enabled"
             ),
-            extracted_data={"requested": request.enable_plugins, "enabled": enabled_plugins, "missing": missing_plugins},
+            extracted_data={
+                "requested": request.enable_plugins, 
+                "enabled": enabled_plugins, 
+                "missing": missing_plugins,
+                "navigation_strategy": navigation_plan["strategy"],
+                "extraction_goal": navigation_plan["extraction_goal"]
+            },
             timestamp=_now_iso(),
         ),
     )
@@ -1009,7 +1252,7 @@ async def scrape_stream(
         await manager.broadcast(url_start_event, session_id)
         yield _sse_event(url_start_event)
 
-        async for update in scrape_url(
+        async for update in scrape_url_intelligently(
             session,
             session_id,
             url,
@@ -1017,6 +1260,7 @@ async def scrape_stream(
             request,
             memory_manager,
             enabled_plugins,
+            navigation_plan,
         ):
             await manager.broadcast(update, session_id)
             yield _sse_event(update)
