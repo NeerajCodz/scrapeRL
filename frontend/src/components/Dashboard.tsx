@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -91,6 +91,11 @@ const getStepColor = (action: string, status: string): string => {
     'python_sandbox': 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30',
   };
   return colorMap[action] || 'text-slate-400 bg-slate-500/20 border-slate-500/30';
+};
+
+const isAgentPluginId = (pluginId: string): boolean => {
+  const lowered = pluginId.toLowerCase();
+  return lowered.startsWith('skill-') || lowered === 'web_scraper';
 };
 
 // Step Accordion Component
@@ -402,6 +407,9 @@ export const Dashboard: React.FC = () => {
   const [progress, setProgress] = useState({ urlIndex: 0, totalUrls: 0, currentUrl: '' });
   const [extractedData, setExtractedData] = useState<Record<string, unknown>>({});
   const abortControllerRef = useRef<{ abort: () => void } | null>(null);
+  const startLockRef = useRef(false);
+  const seenStepKeysRef = useRef<Set<string>>(new Set());
+  const lastSessionInitRef = useRef<string | null>(null);
   
   // Assets
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -475,15 +483,20 @@ export const Dashboard: React.FC = () => {
 
   // Get installed plugins only
   const getInstalledPlugins = () => {
-    if (!pluginsData?.plugins) return { mcps: [], skills: [], apis: [], processors: [] };
+    if (!pluginsData?.plugins) return { mcps: [], apis: [], processors: [] };
     const result: Record<string, PluginInfo[]> = {};
     for (const [category, plugins] of Object.entries(pluginsData.plugins)) {
+      if (category === 'skills') continue;
       result[category] = (plugins as PluginInfo[]).filter(p => p.installed);
     }
     return result;
   };
 
   const installedPlugins = getInstalledPlugins();
+  const enabledNonAgentPlugins = useMemo(
+    () => taskInput.enabledPlugins.filter((pluginId) => !isAgentPluginId(pluginId)),
+    [taskInput.enabledPlugins]
+  );
   
   // Get agents
   const agents: AgentInfo[] = agentsData?.agent_types || [];
@@ -561,6 +574,10 @@ export const Dashboard: React.FC = () => {
   // Start task with streaming
   const handleStart = useCallback(() => {
     if (taskInput.urls.length === 0 && !taskInput.instruction) return;
+    if (startLockRef.current || abortControllerRef.current) return;
+    startLockRef.current = true;
+    seenStepKeysRef.current.clear();
+    lastSessionInitRef.current = null;
     
     setStats(prev => ({ ...prev, episodes: prev.episodes + 1, steps: 0, totalReward: 0, avgReward: 0 }));
     setIsRunning(true);
@@ -583,7 +600,7 @@ export const Dashboard: React.FC = () => {
       model: taskInput.selectedModel.split('/')[1] || 'llama-3.3-70b',
       provider: taskInput.selectedModel.split('/')[0] || 'nvidia',
       enable_memory: true,
-      enable_plugins: taskInput.enabledPlugins,
+      enable_plugins: enabledNonAgentPlugins,
       selected_agents: taskInput.selectedAgents,
       max_steps: 50,
     };
@@ -602,6 +619,8 @@ export const Dashboard: React.FC = () => {
       scrapeRequest,
       // onInit
       (sid) => {
+        if (lastSessionInitRef.current === sid) return;
+        lastSessionInitRef.current = sid;
         setSessionId(sid);
         setLogs(prev => [...prev, {
           id: Date.now().toString(),
@@ -624,6 +643,10 @@ export const Dashboard: React.FC = () => {
       },
       // onStep
       (step) => {
+        const stepKey = `${step.step_number}|${step.action}|${step.url ?? ''}|${step.status}|${step.message}|${step.timestamp}`;
+        if (seenStepKeysRef.current.has(stepKey)) return;
+        seenStepKeysRef.current.add(stepKey);
+
         setCurrentStep(step);
         setAllSteps(prev => [...prev, step]);
         setStats(prev => {
@@ -662,6 +685,8 @@ export const Dashboard: React.FC = () => {
       },
       // onComplete
       (response) => {
+        startLockRef.current = false;
+        abortControllerRef.current = null;
         setScrapeResult(response);
         setIsRunning(false);
         setStats(prev => ({
@@ -690,6 +715,11 @@ export const Dashboard: React.FC = () => {
       },
       // onError
       (error, url) => {
+        if (!url) {
+          startLockRef.current = false;
+          abortControllerRef.current = null;
+          setIsRunning(false);
+        }
         setLogs(prev => [...prev, {
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
@@ -699,7 +729,7 @@ export const Dashboard: React.FC = () => {
         }]);
       }
     );
-  }, [taskInput]);
+  }, [taskInput, enabledNonAgentPlugins]);
 
   // Stop task
   const handleStop = useCallback(() => {
@@ -707,6 +737,7 @@ export const Dashboard: React.FC = () => {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    startLockRef.current = false;
     setIsRunning(false);
     setLogs(prev => [...prev, {
       id: Date.now().toString(),
@@ -939,7 +970,7 @@ export const Dashboard: React.FC = () => {
                 className="px-5 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-amber-500/5"
               >
                 <Plug className="w-4 h-4" />
-                Plugins {taskInput.enabledPlugins.length > 0 && `(${taskInput.enabledPlugins.length})`}
+                Plugins {enabledNonAgentPlugins.length > 0 && `(${enabledNonAgentPlugins.length})`}
               </button>
               
               {/* Task Type */}
@@ -1336,11 +1367,11 @@ export const Dashboard: React.FC = () => {
           </Accordion>
 
           {/* Plugins */}
-          <Accordion title="Plugins" icon={Plug} badge={taskInput.enabledPlugins.length} color="text-amber-400">
-            {taskInput.enabledPlugins.length === 0 ? (
+          <Accordion title="Plugins" icon={Plug} badge={enabledNonAgentPlugins.length} color="text-amber-400">
+            {enabledNonAgentPlugins.length === 0 ? (
               <p className="text-xs text-slate-500 p-2">No plugins enabled</p>
             ) : (
-              taskInput.enabledPlugins.map((pluginId) => (
+              enabledNonAgentPlugins.map((pluginId) => (
                 <div key={pluginId} className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <span className="text-xs text-white">{pluginId}</span>
                 </div>
