@@ -30,10 +30,179 @@ import {
   AlertCircle,
   Download,
   Copy,
+  Navigation,
+  Search,
+  Code,
+  CheckCircle,
+  XCircle,
+  Clock,
+  FileJson,
+  Sparkles,
+  Brain,
+  Compass,
+  Shield,
+  type LucideIcon,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { classNames } from '@/utils/helpers';
 import { apiClient, type ScrapeStep, type ScrapeResponse, type ScrapeRequest } from '@/api/client';
+
+// Step action to icon mapping
+const getStepIcon = (action: string): LucideIcon => {
+  const iconMap: Record<string, LucideIcon> = {
+    'initialize': Sparkles,
+    'navigate': Navigation,
+    'extract': Search,
+    'plugins': Plug,
+    'planner': Brain,
+    'planner_python': Code,
+    'navigator': Compass,
+    'navigator_python': Code,
+    'extractor_python': Code,
+    'verify': Shield,
+    'verifier': Shield,
+    'complete': CheckCircle,
+    'mcp_search': Search,
+    'python_sandbox': Terminal,
+    'error': XCircle,
+  };
+  return iconMap[action] || Activity;
+};
+
+// Step action color mapping
+const getStepColor = (action: string, status: string): string => {
+  if (status === 'failed') return 'text-red-400 bg-red-500/20 border-red-500/30';
+  if (status === 'running') return 'text-cyan-400 bg-cyan-500/20 border-cyan-500/30 animate-pulse';
+  
+  const colorMap: Record<string, string> = {
+    'initialize': 'text-purple-400 bg-purple-500/20 border-purple-500/30',
+    'navigate': 'text-blue-400 bg-blue-500/20 border-blue-500/30',
+    'extract': 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30',
+    'plugins': 'text-amber-400 bg-amber-500/20 border-amber-500/30',
+    'planner': 'text-pink-400 bg-pink-500/20 border-pink-500/30',
+    'planner_python': 'text-orange-400 bg-orange-500/20 border-orange-500/30',
+    'navigator': 'text-indigo-400 bg-indigo-500/20 border-indigo-500/30',
+    'navigator_python': 'text-orange-400 bg-orange-500/20 border-orange-500/30',
+    'extractor_python': 'text-orange-400 bg-orange-500/20 border-orange-500/30',
+    'verify': 'text-teal-400 bg-teal-500/20 border-teal-500/30',
+    'verifier': 'text-teal-400 bg-teal-500/20 border-teal-500/30',
+    'complete': 'text-green-400 bg-green-500/20 border-green-500/30',
+    'mcp_search': 'text-cyan-400 bg-cyan-500/20 border-cyan-500/30',
+    'python_sandbox': 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30',
+  };
+  return colorMap[action] || 'text-slate-400 bg-slate-500/20 border-slate-500/30';
+};
+
+// Step Accordion Component
+interface StepAccordionItemProps {
+  step: ScrapeStep;
+  isExpanded: boolean;
+  onToggle: () => void;
+  isLatest: boolean;
+}
+
+const StepAccordionItem: React.FC<StepAccordionItemProps> = ({ step, isExpanded, onToggle, isLatest }) => {
+  const Icon = getStepIcon(step.action);
+  const colorClasses = getStepColor(step.action, step.status);
+  
+  return (
+    <div className={classNames(
+      'border rounded-lg overflow-hidden transition-all',
+      isLatest ? 'ring-2 ring-cyan-500/50' : '',
+      colorClasses.split(' ').slice(1).join(' ')
+    )}>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className={classNames('p-2 rounded-lg', colorClasses.split(' ').slice(1, 3).join(' '))}>
+            <Icon className={classNames('w-4 h-4', colorClasses.split(' ')[0])} />
+          </div>
+          <div className="text-left">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-white">
+                {step.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              </span>
+              <Badge 
+                variant={step.status === 'completed' ? 'success' : step.status === 'failed' ? 'error' : 'info'} 
+                size="sm"
+              >
+                {step.status}
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-400 truncate max-w-[300px]">{step.message}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <span className="text-xs text-slate-500">Step {step.step_number}</span>
+            {step.reward > 0 && (
+              <p className="text-xs text-emerald-400">+{step.reward.toFixed(2)}</p>
+            )}
+          </div>
+          {isExpanded ? (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          )}
+        </div>
+      </button>
+      
+      {isExpanded && (
+        <div className="px-4 py-3 border-t border-white/10 bg-slate-900/50 space-y-3">
+          {/* Step Details */}
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div>
+              <span className="text-slate-500">Action:</span>
+              <span className="ml-2 text-slate-300">{step.action}</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Status:</span>
+              <span className={classNames(
+                'ml-2',
+                step.status === 'completed' ? 'text-emerald-400' : 
+                step.status === 'failed' ? 'text-red-400' : 'text-cyan-400'
+              )}>{step.status}</span>
+            </div>
+            {step.url && (
+              <div className="col-span-2">
+                <span className="text-slate-500">URL:</span>
+                <span className="ml-2 text-cyan-400 truncate">{step.url}</span>
+              </div>
+            )}
+            {step.duration_ms && (
+              <div>
+                <span className="text-slate-500">Duration:</span>
+                <span className="ml-2 text-slate-300">{step.duration_ms.toFixed(0)}ms</span>
+              </div>
+            )}
+            <div>
+              <span className="text-slate-500">Reward:</span>
+              <span className="ml-2 text-emerald-400">{step.reward.toFixed(2)}</span>
+            </div>
+          </div>
+          
+          {/* Extracted Data */}
+          {step.extracted_data && Object.keys(step.extracted_data).length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs text-slate-500 mb-2">Extracted Data:</p>
+              <pre className="text-xs text-slate-300 bg-slate-800/50 rounded-lg p-3 overflow-auto max-h-40 font-mono">
+                {JSON.stringify(step.extracted_data, null, 2)}
+              </pre>
+            </div>
+          )}
+          
+          {/* Timestamp */}
+          <div className="flex items-center gap-2 text-[10px] text-slate-600">
+            <Clock className="w-3 h-3" />
+            {new Date(step.timestamp).toLocaleTimeString()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Types
 interface TaskInput {
@@ -227,6 +396,8 @@ export const Dashboard: React.FC = () => {
   // Streaming state
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<ScrapeStep | null>(null);
+  const [allSteps, setAllSteps] = useState<ScrapeStep[]>([]);
+  const [expandedStepIndex, setExpandedStepIndex] = useState<number | null>(null);
   const [scrapeResult, setScrapeResult] = useState<ScrapeResponse | null>(null);
   const [progress, setProgress] = useState({ urlIndex: 0, totalUrls: 0, currentUrl: '' });
   const [extractedData, setExtractedData] = useState<Record<string, unknown>>({});
@@ -399,6 +570,8 @@ export const Dashboard: React.FC = () => {
     setScrapeResult(null);
     setExtractedData({});
     setCurrentStep(null);
+    setAllSteps([]);
+    setExpandedStepIndex(null);
     
     // Build scrape request
     const scrapeRequest: ScrapeRequest = {
@@ -452,6 +625,7 @@ export const Dashboard: React.FC = () => {
       // onStep
       (step) => {
         setCurrentStep(step);
+        setAllSteps(prev => [...prev, step]);
         setStats(prev => {
           const steps = prev.steps + 1;
           const totalReward = prev.totalReward + step.reward;
@@ -1263,40 +1437,51 @@ export const Dashboard: React.FC = () => {
             <div className="h-full bg-slate-900/50 border border-cyan-500/10 rounded-2xl p-4">
               {isRunning ? (
                 <div className="h-full flex flex-col">
-                  {/* Current Action */}
+                  {/* Steps Accordion */}
                   <div className="flex-shrink-0 mb-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Activity className="w-5 h-5 text-cyan-400 animate-pulse" />
-                      <span className="text-sm font-semibold text-white">Current Step</span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-5 h-5 text-cyan-400 animate-pulse" />
+                        <span className="text-sm font-semibold text-white">Execution Steps</span>
+                        <Badge variant="info" size="sm">{allSteps.length}</Badge>
+                      </div>
+                      {currentStep && (
+                        <Badge 
+                          variant={currentStep.status === 'completed' ? 'success' : currentStep.status === 'failed' ? 'error' : 'info'}
+                        >
+                          {currentStep.action.toUpperCase()}
+                        </Badge>
+                      )}
                     </div>
-                    {currentStep ? (
-                      <div className="p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <Badge variant={currentStep.status === 'completed' ? 'success' : currentStep.status === 'failed' ? 'error' : 'info'} size="sm">
-                            {currentStep.action.toUpperCase()}
-                          </Badge>
-                          <span className="text-xs text-cyan-300">Step {currentStep.step_number}</span>
+                    
+                    {/* Step Accordion List */}
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                      {allSteps.length === 0 ? (
+                        <div className="p-4 bg-slate-800/50 rounded-xl text-center">
+                          <div className="animate-spin w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                          <p className="text-sm text-slate-400">Initializing scraper...</p>
                         </div>
-                        <p className="text-sm text-white mb-2">{currentStep.message}</p>
-                        <div className="flex items-center gap-4 text-xs text-slate-400">
-                          <span>Reward: <span className="text-emerald-400">{currentStep.reward.toFixed(2)}</span></span>
-                          {currentStep.duration_ms && <span>Duration: {currentStep.duration_ms.toFixed(0)}ms</span>}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-slate-800/50 rounded-xl">
-                        <p className="text-sm text-slate-400">Initializing...</p>
-                      </div>
-                    )}
+                      ) : (
+                        allSteps.map((step, index) => (
+                          <StepAccordionItem
+                            key={`${step.step_number}-${index}`}
+                            step={step}
+                            isExpanded={expandedStepIndex === index}
+                            onToggle={() => setExpandedStepIndex(expandedStepIndex === index ? null : index)}
+                            isLatest={index === allSteps.length - 1}
+                          />
+                        ))
+                      )}
+                    </div>
                   </div>
 
                   {/* Extracted Data Preview */}
                   <div className="flex-1 overflow-auto">
                     <div className="flex items-center gap-2 mb-3">
                       <Database className="w-5 h-5 text-emerald-400" />
-                      <span className="text-sm font-semibold text-white">Extracted Data</span>
+                      <span className="text-sm font-semibold text-white">Live Extracted Data</span>
                     </div>
-                    <div className="p-4 bg-slate-800/50 rounded-xl min-h-[200px] max-h-[400px] overflow-auto">
+                    <div className="p-4 bg-slate-800/50 rounded-xl min-h-[150px] max-h-[250px] overflow-auto">
                       <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap">
                         {Object.keys(extractedData).length > 0 
                           ? JSON.stringify(extractedData, null, 2)
@@ -1313,7 +1498,7 @@ export const Dashboard: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-lg ${scrapeResult.status === 'completed' ? 'bg-emerald-500/20' : 'bg-amber-500/20'}`}>
                         {scrapeResult.status === 'completed' ? (
-                          <Check className="w-6 h-6 text-emerald-400" />
+                          <CheckCircle className="w-6 h-6 text-emerald-400" />
                         ) : (
                           <AlertCircle className="w-6 h-6 text-amber-400" />
                         )}
@@ -1321,7 +1506,7 @@ export const Dashboard: React.FC = () => {
                       <div>
                         <h3 className="text-lg font-semibold text-white">Scraping Complete</h3>
                         <p className="text-sm text-slate-400">
-                          {scrapeResult.urls_processed} URLs • {scrapeResult.total_steps} steps • {scrapeResult.duration_seconds.toFixed(1)}s
+                          {scrapeResult.urls_processed} URLs • {scrapeResult.total_steps} steps • {scrapeResult.duration_seconds.toFixed(1)}s • Reward: {scrapeResult.total_reward.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -1343,11 +1528,50 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Result Content */}
-                  <div className="flex-1 overflow-auto p-4 bg-slate-800/50 rounded-xl">
-                    <pre className="text-sm text-slate-300 font-mono whitespace-pre-wrap">
-                      {scrapeResult.output}
-                    </pre>
+                  {/* Steps Summary (collapsed) */}
+                  {allSteps.length > 0 && (
+                    <div className="mb-4">
+                      <Accordion title={`Execution Steps (${allSteps.length})`} icon={Layers} color="text-cyan-400">
+                        <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                          {allSteps.map((step, index) => (
+                            <div 
+                              key={`result-${step.step_number}-${index}`}
+                              className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg text-xs"
+                            >
+                              <div className="flex items-center gap-2">
+                                {React.createElement(getStepIcon(step.action), { 
+                                  className: classNames('w-3 h-3', getStepColor(step.action, step.status).split(' ')[0]) 
+                                })}
+                                <span className="text-slate-300">{step.action}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-emerald-400">+{step.reward.toFixed(2)}</span>
+                                {step.status === 'completed' ? (
+                                  <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                ) : step.status === 'failed' ? (
+                                  <XCircle className="w-3 h-3 text-red-400" />
+                                ) : (
+                                  <Clock className="w-3 h-3 text-cyan-400" />
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </Accordion>
+                    </div>
+                  )}
+
+                  {/* Result Content - Full Output */}
+                  <div className="flex-1 overflow-auto">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileJson className="w-4 h-4 text-amber-400" />
+                      <span className="text-sm font-medium text-white">Output ({scrapeResult.output_format})</span>
+                    </div>
+                    <div className="p-4 bg-slate-800/50 rounded-xl overflow-auto max-h-[400px]">
+                      <pre className="text-sm text-slate-300 font-mono whitespace-pre-wrap">
+                        {scrapeResult.output}
+                      </pre>
+                    </div>
                   </div>
 
                   {/* Errors */}
