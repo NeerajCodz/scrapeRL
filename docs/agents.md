@@ -27,6 +27,7 @@ Explores pages and search results:
 - URL prioritization
 - Link traversal policy
 - Page relevance scoring
+- Site-template lookup (`/api/sites/match`) for domain-specific guidance
 
 ### 3. Extractor Agent
 
@@ -66,10 +67,18 @@ Cons: weaker specialization.
 Coordinator delegates work:
 
 1. Planner emits execution graph
-2. Navigator discovers candidate pages
+2. Navigator discovers candidate pages and loads site templates
 3. Extractor parses and emits data
 4. Verifier validates outputs
 5. Memory Agent stores reusable patterns
+
+## Site Template Awareness
+
+Agents can reference inbuilt templates from `backend/app/sites/`:
+
+- Planner resolves template context early (site id, strategy, output fields)
+- Navigator refreshes template context per URL
+- Execution steps include template provenance (`site_template` action)
 
 Pros: modular, robust, scalable.
 Cons: coordination overhead.

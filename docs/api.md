@@ -898,4 +898,25 @@ async for chunk in api.generate_stream(prompt="...", model="claude-3-5-sonnet"):
 
 ---
 
+## Site Template APIs
+
+The backend now exposes inbuilt site templates for agent orchestration:
+
+- `GET /api/sites`  
+  Returns full template catalog (50+ domains).
+- `GET /api/sites/{site_id}`  
+  Returns one template definition.
+- `POST /api/sites/match`  
+  Resolves best template from `instructions` + `assets`.
+
+Example:
+
+```bash
+curl -X POST http://localhost:8000/api/sites/match \
+  -H "Content-Type: application/json" \
+  -d "{\"instructions\":\"get trending communities\",\"assets\":[\"https://reddit.com\"]}"
+```
+
+---
+
 **Next:** See [mcp.md](./mcp.md) for MCP server integration.

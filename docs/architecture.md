@@ -69,6 +69,15 @@ Responsibilities:
 - lazy installation
 - composition workflows
 
+### 3.5 Site Template Layer
+
+Responsibilities:
+
+- maintain inbuilt domain templates (`backend/app/sites/`)
+- map instructions/assets to known site behavior
+- provide reusable navigation goals/fields for planner and navigator agents
+- expose template catalog through `/api/sites*` endpoints
+
 ### 4. Data Plane
 
 Responsibilities:
@@ -126,6 +135,15 @@ Task queue supports:
 - Long-term memory: vector DB + metadata store
 - Logs/metrics: append-only time-series-friendly sink
 - Exports: JSON/CSV trace packs
+
+## Backend Folder Notes (Template System)
+
+```text
+backend/app/sites/
+  - models.py      # SiteTemplate dataclass
+  - templates.py   # 50+ inbuilt site templates
+  - registry.py    # list/get/match/serialize helpers
+```
 
 ## Reliability
 
