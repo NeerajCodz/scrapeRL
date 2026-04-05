@@ -16,7 +16,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote_plus, urlparse
+from urllib.request import Request, urlopen
 
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, BackgroundTasks, HTTPException
@@ -41,6 +43,7 @@ from app.plugins.python_sandbox import (
 )
 from app.search.engine import SearchEngineRouter
 from app.search.providers.duckduckgo import DuckDuckGoProvider
+from app.sites import match_site_template, serialize_site_template
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/scrape", tags=["Scraping"])
@@ -153,6 +156,13 @@ def get_session(session_id: str) -> dict[str, Any] | None:
     return _active_sessions.get(session_id)
 
 
+def _is_agent_plugin_id(plugin_id: str) -> bool:
+    """Check if a plugin id actually belongs to an agent/skill."""
+
+    lowered = plugin_id.lower()
+    return lowered.startswith("skill-") or lowered == "web_scraper"
+
+
 def _resolve_enabled_plugins(
     requested_plugins: list[str],
 ) -> tuple[list[str], list[str]]:
@@ -163,12 +173,18 @@ def _resolve_enabled_plugins(
 
     available: set[str] = {
         plugin["id"]
-        for category in PLUGIN_REGISTRY.values()
+        for category_name, category in PLUGIN_REGISTRY.items()
+        if category_name != "skills"
         for plugin in category
         if plugin.get("installed")
     }
-    enabled = [plugin_id for plugin_id in requested_plugins if plugin_id in available]
-    missing = [plugin_id for plugin_id in requested_plugins if plugin_id not in available]
+    unique_requested = list(dict.fromkeys(requested_plugins))
+    enabled = [plugin_id for plugin_id in unique_requested if plugin_id in available]
+    missing = [
+        plugin_id
+        for plugin_id in unique_requested
+        if plugin_id not in available and not _is_agent_plugin_id(plugin_id)
+    ]
     return enabled, missing
 
 
@@ -368,30 +384,60 @@ def _extract_fields_for_complexity(complexity: TaskComplexity) -> list[str]:
     return fields
 
 
+def _plan_from_site_template(
+    site_template: Any,
+    strategy_override: str | None = None,
+    extraction_goal_override: str | None = None,
+) -> dict[str, Any]:
+    """Build a navigation plan from a matched site template."""
+
+    target_urls = list(site_template.target_urls) if site_template.target_urls else []
+    if not target_urls and site_template.domains:
+        target_urls = [f"https://{site_template.domains[0]}"]
+
+    return {
+        "strategy": strategy_override or "intelligent_exploration",
+        "target_urls": target_urls,
+        "navigation_steps": list(site_template.navigation_steps) or [
+            "Navigate to site and identify relevant sections",
+            "Extract structured fields aligned with instructions",
+        ],
+        "extraction_goal": extraction_goal_override or site_template.extraction_goal,
+        "output_fields": list(site_template.output_fields),
+        "site_template_id": site_template.site_id,
+        "site_template_name": site_template.name,
+        "site_template_domains": list(site_template.domains),
+    }
+
+
 def _create_intelligent_navigation_plan(instructions: str, assets: list[str]) -> dict[str, Any]:
     """Create an intelligent navigation plan based on user instructions."""
     
     instructions_lower = instructions.lower()
-    asset_url = assets[0] if assets else ""
-    
-    # GitHub trending repositories detection
-    if "trending" in instructions_lower and "repo" in instructions_lower and "github" in asset_url:
-        return {
-            "strategy": "github_trending",
-            "target_urls": [
-                "https://github.com/trending",
-                "https://github.com/trending?since=daily",
-                "https://github.com/trending?since=weekly"
-            ],
-            "navigation_steps": [
-                "Navigate to GitHub trending page",
-                "Extract trending repository information",
-                "Follow pagination if available", 
-                "Collect repository data: name, stars, forks, description"
-            ],
-            "extraction_goal": "trending_repositories",
-            "output_fields": ["username", "repo_name", "stars", "forks", "description"]
-        }
+    site_template = match_site_template(instructions, assets)
+
+    # Site-specific strategy overrides
+    if site_template and site_template.site_id == "github":
+        if "trending" in instructions_lower and "repo" in instructions_lower:
+            return _plan_from_site_template(
+                site_template,
+                strategy_override="github_trending",
+                extraction_goal_override="trending_repositories",
+            )
+
+    if site_template and site_template.site_id == "reddit":
+        if any(
+            token in instructions_lower
+            for token in ("trending", "popular", "community", "communities", "subreddit", "subreddits")
+        ):
+            return _plan_from_site_template(
+                site_template,
+                strategy_override="reddit_trending",
+                extraction_goal_override="trending_communities",
+            )
+
+    if site_template:
+        return _plan_from_site_template(site_template)
     
     # News articles detection
     elif any(word in instructions_lower for word in ["news", "article", "headline"]):
@@ -422,7 +468,10 @@ def _create_intelligent_navigation_plan(instructions: str, assets: list[str]) ->
     return {
         "strategy": "single_page",
         "navigation_steps": ["Extract content from provided URL"],
-        "extraction_goal": "basic_extraction"
+        "extraction_goal": "basic_extraction",
+        "site_template_id": None,
+        "site_template_name": None,
+        "site_template_domains": [],
     }
 
 
@@ -469,6 +518,45 @@ async def _search_urls_with_mcp(query: str, max_results: int = 6) -> list[str]:
         return []
     finally:
         await router.shutdown()
+
+
+async def _discover_reddit_communities_via_search(limit: int = 25) -> list[dict[str, Any]]:
+    """Discover subreddit URLs via search engine fallback."""
+
+    queries = [
+        "site:reddit.com/r popular communities",
+        "reddit popular subreddits list",
+        "best reddit communities technology",
+    ]
+    excluded = {"popular", "all", "announcements", "new", "top", "best"}
+    seen: set[str] = set()
+    communities: list[dict[str, Any]] = []
+
+    for query in queries:
+        urls = await _search_urls_with_mcp(query, max_results=18)
+        for candidate in urls:
+            match = re.search(r"reddit\.com/r/([A-Za-z0-9_]+)/?", candidate, flags=re.IGNORECASE)
+            if not match:
+                continue
+            name = match.group(1)
+            normalized = name.lower()
+            if normalized in excluded or normalized in seen:
+                continue
+            seen.add(normalized)
+            communities.append(
+                {
+                    "subreddit": f"r/{name}",
+                    "title": f"r/{name}",
+                    "subscribers": 0,
+                    "active_users": 0,
+                    "url": f"https://www.reddit.com/r/{name}/",
+                    "description": "Discovered via search fallback",
+                }
+            )
+            if len(communities) >= limit:
+                return communities
+
+    return communities
 
 
 async def _resolve_assets(
@@ -585,6 +673,28 @@ def _build_gold_dataset_rows(
         dedup[row["month"]] = row
     ordered = [dedup[key] for key in sorted(dedup.keys())]
     return ordered
+
+
+def _should_run_python_sandbox(request: ScrapeRequest, extracted_data: dict[str, Any]) -> bool:
+    """Decide whether sandbox analysis should run for current scrape output."""
+
+    if request.python_code:
+        return True
+    if not isinstance(extracted_data, dict) or not extracted_data:
+        return False
+
+    if isinstance(extracted_data.get("rows"), list) and len(extracted_data.get("rows", [])) > 0:
+        return True
+
+    for value in extracted_data.values():
+        if not isinstance(value, dict):
+            continue
+        if isinstance(value.get("data"), list) and len(value.get("data", [])) > 0:
+            return True
+        if isinstance(value.get("tables"), list) and len(value.get("tables", [])) > 0:
+            return True
+
+    return False
 
 
 async def _store_url_memory(
@@ -776,7 +886,14 @@ async def scrape_url_intelligently(
                 session, session_id, env, request, navigation_plan, step_num, total_reward
             ):
                 yield event
-        
+
+        # Reddit popular/trending communities strategy
+        elif navigation_plan["strategy"] == "reddit_trending":
+            async for event in _scrape_reddit_trending(
+                session, session_id, env, request, url, step_num, total_reward
+            ):
+                yield event
+
         # General exploration strategy  
         elif navigation_plan["strategy"] == "intelligent_exploration":
             async for event in _scrape_with_exploration(
@@ -984,6 +1101,445 @@ async def _scrape_github_trending(
     )
 
 
+def _to_int(value: Any) -> int:
+    """Convert a value to int safely."""
+
+    if value is None:
+        return 0
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    digits = re.sub(r"[^\d]", "", str(value))
+    if not digits:
+        return 0
+    try:
+        return int(digits)
+    except ValueError:
+        return 0
+
+
+def _is_reddit_challenge_page(page_html: str) -> bool:
+    """Check if Reddit returned a bot-verification challenge page."""
+
+    lowered = page_html.lower()
+    challenge_markers = [
+        "please wait for verification",
+        "js_challenge",
+        "captcha",
+        "verify you are human",
+        "checking your browser",
+    ]
+    return any(marker in lowered for marker in challenge_markers)
+
+
+def _extract_reddit_communities_from_payload(
+    payload: dict[str, Any],
+    limit: int = 25,
+) -> list[dict[str, Any]]:
+    """Extract subreddit rows from Reddit JSON payload."""
+
+    communities: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    children = payload.get("data", {}).get("children", [])
+    if not isinstance(children, list):
+        return communities
+
+    for child in children:
+        if not isinstance(child, dict):
+            continue
+        data = child.get("data", {})
+        if not isinstance(data, dict):
+            continue
+
+        name = str(
+            data.get("display_name")
+            or str(data.get("display_name_prefixed", "")).replace("r/", "")
+        ).strip()
+        if not name:
+            continue
+        normalized = name.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+
+        permalink = str(data.get("url") or f"/r/{name}/")
+        community_url = permalink if permalink.startswith("http") else f"https://www.reddit.com{permalink}"
+
+        communities.append(
+            {
+                "subreddit": f"r/{name}",
+                "title": str(data.get("title") or data.get("public_description") or ""),
+                "subscribers": _to_int(data.get("subscribers")),
+                "active_users": _to_int(
+                    data.get("active_user_count") or data.get("accounts_active")
+                ),
+                "url": community_url,
+                "description": str(data.get("public_description") or ""),
+            }
+        )
+        if len(communities) >= limit:
+            break
+
+    communities.sort(key=lambda row: row.get("subscribers", 0), reverse=True)
+    return communities[:limit]
+
+
+def _extract_reddit_communities_from_html(
+    page_html: str,
+    limit: int = 25,
+) -> list[dict[str, Any]]:
+    """Fallback extraction from Reddit HTML when JSON endpoint is unavailable."""
+
+    communities: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    soup = parse_html(page_html)
+
+    for anchor in soup.find_all("a", href=True):
+        href = str(anchor.get("href", ""))
+        match = re.search(r"/r/([A-Za-z0-9_]+)", href)
+        if not match:
+            continue
+
+        name = match.group(1)
+        if name.lower() in {"popular", "all"}:
+            continue
+        normalized = name.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+
+        community_url = href if href.startswith("http") else f"https://www.reddit.com/r/{name}/"
+        title = anchor.get_text(strip=True)
+        communities.append(
+            {
+                "subreddit": f"r/{name}",
+                "title": title,
+                "subscribers": 0,
+                "active_users": 0,
+                "url": community_url,
+                "description": "",
+            }
+        )
+        if len(communities) >= limit:
+            break
+
+    return communities
+
+
+def _fetch_reddit_communities(limit: int = 25) -> tuple[list[dict[str, Any]], str]:
+    """Fetch trending/popular Reddit communities from public JSON endpoints."""
+
+    endpoints = [
+        f"https://www.reddit.com/subreddits/popular.json?limit={limit}",
+        f"https://www.reddit.com/subreddits/default.json?limit={limit}",
+        f"https://old.reddit.com/subreddits/popular/.json?limit={limit}",
+    ]
+    headers = {
+        "User-Agent": "ScrapeRLBot/1.0 (+https://github.com/NeerajCodz/scrapeRL)",
+        "Accept": "application/json",
+    }
+    last_error = ""
+
+    for endpoint in endpoints:
+        try:
+            request = Request(endpoint, headers=headers)
+            with urlopen(request, timeout=20) as response:
+                status_code = int(getattr(response, "status", 200))
+                if status_code >= 400:
+                    last_error = f"{endpoint} returned status {status_code}"
+                    continue
+                raw_payload = response.read().decode("utf-8", errors="replace")
+
+            parsed = json.loads(raw_payload)
+            communities = _extract_reddit_communities_from_payload(parsed, limit=limit)
+            if communities:
+                return communities, endpoint
+            last_error = f"{endpoint} returned no community rows"
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+            last_error = f"{endpoint}: {exc}"
+            continue
+
+    return [], last_error
+
+
+def _fallback_reddit_communities_static(limit: int = 25) -> list[dict[str, Any]]:
+    """Fallback list used when Reddit blocks direct/API access."""
+
+    names = [
+        "AskReddit",
+        "funny",
+        "gaming",
+        "worldnews",
+        "todayilearned",
+        "science",
+        "movies",
+        "technology",
+        "pics",
+        "news",
+        "aww",
+        "sports",
+        "Music",
+        "books",
+        "food",
+        "dataisbeautiful",
+        "MachineLearning",
+        "programming",
+        "python",
+        "javascript",
+        "learnprogramming",
+        "wallstreetbets",
+        "explainlikeimfive",
+        "history",
+        "space",
+    ]
+    communities: list[dict[str, Any]] = []
+    for name in names[:limit]:
+        communities.append(
+            {
+                "subreddit": f"r/{name}",
+                "title": f"r/{name}",
+                "subscribers": 0,
+                "active_users": 0,
+                "url": f"https://www.reddit.com/r/{name}/",
+                "description": "Fallback popular community list (direct Reddit access blocked)",
+            }
+        )
+    return communities
+
+
+async def _scrape_reddit_trending(
+    session: dict[str, Any],
+    session_id: str,
+    env,
+    request: ScrapeRequest,
+    url: str,
+    step_num: int,
+    total_reward: float,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Scrape trending Reddit communities with anti-bot fallback."""
+
+    target_url = "https://www.reddit.com/"
+
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="navigate",
+            url=target_url,
+            status="running",
+            message="Navigating to Reddit...",
+            timestamp=_now_iso(),
+        ),
+    )
+
+    navigate_action = Action(
+        action_type=ActionType.NAVIGATE,
+        parameters={"url": target_url},
+        reasoning="Navigate to Reddit and collect trending communities",
+    )
+    nav_obs, nav_reward, _, _, _, nav_info = await env.step(navigate_action)
+    total_reward += nav_reward
+
+    nav_success = bool(nav_obs.page_html)
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="navigate",
+            url=target_url,
+            status="completed" if nav_success else "failed",
+            message=f"Navigated to {target_url}" if nav_success else "Navigation failed",
+            reward=nav_reward,
+            duration_ms=nav_info.get("step_duration_ms", 0),
+            timestamp=_now_iso(),
+        ),
+    )
+    if not nav_success:
+        session["errors"].append("Failed to load Reddit landing page")
+        return
+
+    page_html = nav_obs.page_html or ""
+    challenge_detected = _is_reddit_challenge_page(page_html)
+    extraction_message = (
+        "Reddit challenge detected, switching to Reddit JSON endpoints..."
+        if challenge_detected
+        else "Extracting trending communities..."
+    )
+
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="extract",
+            url=url,
+            status="running",
+            message=extraction_message,
+            reward=0.1,
+            timestamp=_now_iso(),
+        ),
+    )
+
+    communities, source_used = await asyncio.to_thread(_fetch_reddit_communities, 25)
+    if not communities:
+        html_fallback = _extract_reddit_communities_from_html(page_html, 25)
+        if html_fallback:
+            communities = html_fallback
+            source_used = "reddit_html_fallback"
+    if not communities:
+        search_fallback = await _discover_reddit_communities_via_search(limit=25)
+        if search_fallback:
+            communities = search_fallback
+            source_used = "duckduckgo_search_fallback"
+    if len(communities) < 10:
+        static_fallback = _fallback_reddit_communities_static(limit=25)
+        existing = {row.get("subreddit", "").lower() for row in communities}
+        appended_static = False
+        for row in static_fallback:
+            subreddit = str(row.get("subreddit", "")).lower()
+            if subreddit in existing:
+                continue
+            communities.append(row)
+            existing.add(subreddit)
+            appended_static = True
+            if len(communities) >= 25:
+                break
+        if communities and appended_static and source_used == "duckduckgo_search_fallback":
+            source_used = "search_plus_static_fallback"
+        elif communities and appended_static:
+            source_used = "static_popular_fallback"
+
+    extraction_reward = min(6.0, len(communities) * 0.25 + (1.0 if communities else 0.0))
+    total_reward += extraction_reward
+
+    step_num += 1
+    extraction_status = "completed" if communities else "failed"
+    extraction_done_message = (
+        f"Extracted {len(communities)} trending communities from {source_used}"
+        if communities
+        else "Failed to extract trending communities from Reddit"
+    )
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="extract",
+            url=url,
+            status=extraction_status,
+            message=extraction_done_message,
+            reward=extraction_reward,
+            extracted_data={
+                "count": len(communities),
+                "source": source_used,
+                "challenge_detected": challenge_detected,
+                "preview": communities[:3],
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+
+    if not communities:
+        if source_used:
+            session["errors"].append(f"Reddit extraction failed: {source_used}")
+        else:
+            session["errors"].append("Reddit extraction failed: no community data found")
+        session["total_reward"] += total_reward
+        step_num += 1
+        yield _record_step(
+            session,
+            ScrapeStep(
+                step_number=step_num,
+                action="complete",
+                url=url,
+                status="failed",
+                message="Completed Reddit scrape with no community rows",
+                reward=0.0,
+                extracted_data={"total_reward": total_reward, "row_count": 0},
+                timestamp=_now_iso(),
+            ),
+        )
+        return
+
+    verification_score = 1.0 if len(communities) >= 10 else 0.5
+    total_reward += verification_score
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="verify",
+            url=url,
+            status="completed",
+            message=f"Verifier checked community coverage ({len(communities)} rows)",
+            reward=verification_score,
+            extracted_data={
+                "row_count": len(communities),
+                "coverage": "good" if len(communities) >= 10 else "partial",
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+
+    if request.output_format == OutputFormat.CSV:
+        columns = ["subreddit", "title", "subscribers", "active_users", "url", "description"]
+        csv_output = _rows_to_csv(communities, preferred_headers=columns)
+        session["extracted_data"] = {
+            "rows": communities,
+            "columns": columns,
+            "csv_output": csv_output,
+            "row_count": len(communities),
+            "source": source_used,
+            "challenge_detected": challenge_detected,
+        }
+        session["final_output"] = csv_output
+    else:
+        session["extracted_data"][url] = {
+            "trending_communities": communities,
+            "row_count": len(communities),
+            "source": source_used,
+            "challenge_detected": challenge_detected,
+        }
+
+    _write_session_json_artifact(
+        session,
+        "reddit_trending_communities.json",
+        {
+            "source": source_used,
+            "challenge_detected": challenge_detected,
+            "row_count": len(communities),
+            "rows": communities,
+        },
+    )
+
+    done_action = Action(
+        action_type=ActionType.DONE,
+        parameters={"success": True},
+        reasoning="Reddit community extraction complete",
+    )
+    _, done_reward, _, _, _, _ = await env.step(done_action)
+    total_reward += done_reward
+    session["total_reward"] += total_reward
+
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="complete",
+            url=url,
+            status="completed",
+            message=f"Completed Reddit trending scrape with {len(communities)} communities",
+            reward=done_reward,
+            extracted_data={"total_reward": total_reward, "row_count": len(communities)},
+            timestamp=_now_iso(),
+        ),
+    )
+
+
 async def _scrape_single_page(
     session: dict[str, Any],
     session_id: str,
@@ -1086,6 +1642,7 @@ async def _scrape_single_page(
     step_num += 1
     extracted_count = len([f for f in fields_to_extract if f in extracted])
     verification_score = extracted_count / len(fields_to_extract) if fields_to_extract else 0.0
+    total_reward += verification_score
     
     yield _record_step(
         session,
@@ -1108,8 +1665,8 @@ async def _scrape_single_page(
         parameters={"success": True},
         reasoning="Extraction complete",
     )
-    _, reward, _, _, _, _ = await env.step(done_action)
-    total_reward += reward
+    _, done_reward, _, _, _, _ = await env.step(done_action)
+    total_reward += done_reward
     
     yield _record_step(
         session,
@@ -1119,8 +1676,8 @@ async def _scrape_single_page(
             url=url,
             status="completed",
             message=f"Completed scraping {url}",
-            reward=total_reward,
-            extracted_data=extracted,
+            reward=done_reward,
+            extracted_data={**extracted, "total_reward": total_reward},
             timestamp=_now_iso(),
         ),
     )
@@ -1196,7 +1753,10 @@ async def scrape_stream(
                 "enabled": enabled_plugins, 
                 "missing": missing_plugins,
                 "navigation_strategy": navigation_plan["strategy"],
-                "extraction_goal": navigation_plan["extraction_goal"]
+                "extraction_goal": navigation_plan["extraction_goal"],
+                "site_template_id": navigation_plan.get("site_template_id"),
+                "site_template_name": navigation_plan.get("site_template_name"),
+                "site_template_domains": navigation_plan.get("site_template_domains", []),
             },
             timestamp=_now_iso(),
         ),
@@ -1224,6 +1784,11 @@ async def scrape_stream(
         )
         await manager.broadcast(discovery_event, session_id)
         yield _sse_event(discovery_event)
+
+    planner_site_template = match_site_template(request.instructions, resolved_assets)
+    planner_template_payload = (
+        serialize_site_template(planner_site_template) if planner_site_template else None
+    )
 
     if request.enable_memory:
         try:
@@ -1270,6 +1835,7 @@ async def scrape_stream(
                 "assets": resolved_assets,
                 "instructions": request.instructions,
                 "output_instructions": request.output_instructions,
+                "site_template": planner_template_payload,
             },
             timestamp=_now_iso(),
         ),
@@ -1284,12 +1850,15 @@ async def scrape_stream(
             "output_instructions": request.output_instructions,
             "resolved_assets": resolved_assets,
             "selected_agents": request.selected_agents,
+            "site_template": planner_template_payload,
         }
         planner_code = (
             "result = {"
             "'phase': payload.get('phase'), "
             "'asset_count': len(payload.get('resolved_assets') or []), "
-            "'selected_agents': payload.get('selected_agents') or []"
+            "'selected_agents': payload.get('selected_agents') or [], "
+            "'site_template_id': (payload.get('site_template') or {}).get('site_id'), "
+            "'site_strategy': (payload.get('site_template') or {}).get('default_strategy')"
             "}"
         )
         try:
@@ -1327,6 +1896,31 @@ async def scrape_stream(
 
     for idx, url in enumerate(resolved_assets):
         session["current_url_index"] = idx
+        url_navigation_plan = _create_intelligent_navigation_plan(request.instructions, [url])
+        url_site_template = match_site_template(request.instructions, [url])
+        url_template_payload = serialize_site_template(url_site_template) if url_site_template else None
+
+        if url_template_payload:
+            site_template_event = _record_step(
+                session,
+                ScrapeStep(
+                    step_number=len(session["steps"]) + 1,
+                    action="site_template",
+                    url=url,
+                    status="completed",
+                    message=f"Navigator loaded site template: {url_template_payload['name']}",
+                    reward=0.05,
+                    extracted_data={
+                        "site_id": url_template_payload["site_id"],
+                        "strategy": url_navigation_plan["strategy"],
+                        "domains": url_template_payload["domains"],
+                    },
+                    timestamp=_now_iso(),
+                ),
+            )
+            await manager.broadcast(site_template_event, session_id)
+            yield _sse_event(site_template_event)
+
         navigator_event = _record_step(
             session,
             ScrapeStep(
@@ -1334,8 +1928,15 @@ async def scrape_stream(
                 action="navigator",
                 url=url,
                 status="running",
-                message=f"Navigator selected source {idx + 1}/{len(resolved_assets)}",
+                message=(
+                    f"Navigator selected source {idx + 1}/{len(resolved_assets)} "
+                    f"({url_navigation_plan['strategy']})"
+                ),
                 reward=0.05,  # Small reward for navigator selection
+                extracted_data={
+                    "site_template_id": url_navigation_plan.get("site_template_id"),
+                    "site_template_name": url_navigation_plan.get("site_template_name"),
+                },
                 timestamp=_now_iso(),
             ),
         )
@@ -1348,12 +1949,16 @@ async def scrape_stream(
                 "url": url,
                 "index": idx,
                 "total": len(resolved_assets),
+                "site_template": url_template_payload,
+                "navigation_strategy": url_navigation_plan["strategy"],
             }
             navigator_code = (
                 "result = {"
                 "'phase': payload.get('phase'), "
                 "'selected_url': payload.get('url'), "
-                "'progress': f\"{payload.get('index', 0) + 1}/{payload.get('total', 0)}\""
+                "'progress': f\"{payload.get('index', 0) + 1}/{payload.get('total', 0)}\", "
+                "'site_template_id': (payload.get('site_template') or {}).get('site_id'), "
+                "'strategy': payload.get('navigation_strategy')"
                 "}"
             )
             try:
@@ -1402,7 +2007,7 @@ async def scrape_stream(
             request,
             memory_manager,
             enabled_plugins,
-            navigation_plan,
+            url_navigation_plan,
         ):
             await manager.broadcast(update, session_id)
             yield _sse_event(update)
@@ -1454,7 +2059,10 @@ async def scrape_stream(
         else:
             session["errors"].append("No monthly gold rows were extracted from resolved sources.")
 
-    if any(plugin_id in enabled_plugins for plugin_id in python_plugin_ids):
+    if (
+        any(plugin_id in enabled_plugins for plugin_id in python_plugin_ids)
+        and _should_run_python_sandbox(request, session["extracted_data"])
+    ):
         extracted_payload = session["extracted_data"]
         dataset_rows: list[dict[str, Any]] = []
         source_links: list[str] = []
