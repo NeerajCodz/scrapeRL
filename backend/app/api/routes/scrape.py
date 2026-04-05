@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 from urllib.parse import quote_plus, urlparse
 
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -43,6 +44,11 @@ from app.search.providers.duckduckgo import DuckDuckGoProvider
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/scrape", tags=["Scraping"])
+
+
+def parse_html(html: str) -> BeautifulSoup:
+    """Parse HTML string into BeautifulSoup object."""
+    return BeautifulSoup(html, "html.parser")
 
 
 class OutputFormat(str, Enum):
@@ -719,6 +725,25 @@ async def scrape_url(
                 ),
             )
 
+            if terminated or truncated:
+                break
+
+    except Exception as exc:
+        error_message = f"{url}: {exc}"
+        session["errors"].append(error_message)
+        logger.exception("Error scraping URL", extra={"url": url, "session_id": session_id})
+        yield {
+            "type": "error",
+            "data": {
+                "url": url,
+                "error": str(exc),
+                "timestamp": _now_iso(),
+            },
+        }
+    finally:
+        remove_environment(episode_id)
+
+
 async def scrape_url_intelligently(
     session: dict[str, Any],
     session_id: str,
@@ -742,21 +767,24 @@ async def scrape_url_intelligently(
         
         # GitHub trending strategy
         if navigation_plan["strategy"] == "github_trending":
-            yield from _scrape_github_trending(
+            async for event in _scrape_github_trending(
                 session, session_id, env, request, navigation_plan, step_num, total_reward
-            )
+            ):
+                yield event
         
         # General exploration strategy  
         elif navigation_plan["strategy"] == "intelligent_exploration":
-            yield from _scrape_with_exploration(
+            async for event in _scrape_with_exploration(
                 session, session_id, env, request, navigation_plan, url, step_num, total_reward
-            )
+            ):
+                yield event
             
         # Default single page
         else:
-            yield from _scrape_single_page(
+            async for event in _scrape_single_page(
                 session, session_id, env, request, url, step_num, total_reward
-            )
+            ):
+                yield event
             
     except Exception as exc:
         logger.error(f"Intelligent scraping failed for {url}: {exc}")
@@ -909,93 +937,143 @@ async def _scrape_single_page(
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Fallback to original single-page scraping."""
     
-    # Use the original scrape_url logic for single pages
-    async for result in scrape_url(session, session_id, url, get_settings(), request, None, []):
-        yield result
-                step_num += 1
-                yield _record_step(
-                    session,
-                    ScrapeStep(
-                        step_number=step_num,
-                        action="extractor_python",
-                        url=url,
-                        status="completed",
-                        message="Extractor agent ran sandbox Python analysis",
-                        extracted_data=phase_result.output,
-                        timestamp=_now_iso(),
-                    ),
-                )
-            else:
-                session["errors"].append(phase_result.error or "Extractor sandbox analysis failed")
-
+    # Navigate to URL
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="navigate",
+            url=url,
+            status="running",
+            message=f"Navigating to {url}...",
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    navigate_action = Action(
+        action_type=ActionType.NAVIGATE,
+        parameters={"url": url},
+        reasoning=f"Navigate to target URL: {url}",
+    )
+    nav_obs, reward, _, _, _, nav_info = await env.step(navigate_action)
+    total_reward += reward
+    
+    nav_success = nav_info.get("action_result", {}).get("success", bool(nav_obs.page_html))
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="navigate",
+            url=url,
+            status="completed" if nav_success else "failed",
+            message=f"Navigated to {url}" if nav_success else "Navigation failed",
+            reward=reward,
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    if not nav_success or not nav_obs.page_html:
+        session["errors"].append(f"Failed to navigate to {url}")
+        return
+        
+    # Extract fields
+    extracted = {}
+    fields_to_extract = _extract_fields_for_complexity(request.complexity)
+    
+    for field_name in fields_to_extract:
         step_num += 1
-        extracted_count = len([name for name in fields_to_extract if name in extracted])
-        verification_score = (
-            extracted_count / len(fields_to_extract)
-            if fields_to_extract
-            else 0.0
-        )
         yield _record_step(
             session,
             ScrapeStep(
                 step_number=step_num,
-                action="verify",
+                action="extract",
                 url=url,
-                status="completed",
-                message=f"Verifier checked extraction completeness ({extracted_count}/{len(fields_to_extract)})",
-                reward=verification_score,
-                extracted_data={"coverage": verification_score},
+                status="running",
+                message=f"Extracting {field_name}...",
                 timestamp=_now_iso(),
             ),
         )
-
-        step_num += 1
-        done_action = Action(
-            action_type=ActionType.DONE,
-            parameters={"success": True},
-            reasoning="Extraction complete",
+        
+        extract_action = Action(
+            action_type=ActionType.EXTRACT_FIELD,
+            parameters={"field_name": field_name},
+            reasoning=f"Extract {field_name} from page",
         )
-        _, reward, _, _, _, _ = await env.step(done_action)
+        obs, reward, _, _, _, _ = await env.step(extract_action)
         total_reward += reward
+        
+        if obs.extracted_so_far:
+            for ef in obs.extracted_so_far:
+                if ef.field_name == field_name:
+                    extracted[field_name] = ef.value
+                    break
+        
         yield _record_step(
             session,
             ScrapeStep(
                 step_number=step_num,
-                action="complete",
+                action="extract",
                 url=url,
                 status="completed",
-                message=f"Completed scraping {url}",
-                reward=total_reward,
-                extracted_data=extracted,
+                message=f"Extracted {field_name}",
+                reward=reward,
+                extracted_data={field_name: extracted.get(field_name)},
                 timestamp=_now_iso(),
             ),
         )
-
-        session["total_reward"] += total_reward
-        session["extracted_data"][url] = extracted
-        _write_session_json_artifact(
-            session,
-            f"{_safe_artifact_name(urlparse(url).netloc or url)}_extracted.json",
-            extracted,
-        )
-
-        if request.enable_memory:
-            await _store_url_memory(session_id, url, extracted, memory_manager)
-
-    except Exception as exc:
-        error_message = f"{url}: {exc}"
-        session["errors"].append(error_message)
-        logger.exception("Error scraping URL", extra={"url": url, "session_id": session_id})
-        yield {
-            "type": "error",
-            "data": {
-                "url": url,
-                "error": str(exc),
-                "timestamp": _now_iso(),
-            },
-        }
-    finally:
-        remove_environment(episode_id)
+    
+    # Verification step
+    step_num += 1
+    extracted_count = len([f for f in fields_to_extract if f in extracted])
+    verification_score = extracted_count / len(fields_to_extract) if fields_to_extract else 0.0
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="verify",
+            url=url,
+            status="completed",
+            message=f"Verifier checked extraction completeness ({extracted_count}/{len(fields_to_extract)})",
+            reward=verification_score,
+            extracted_data={"coverage": verification_score},
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Complete
+    step_num += 1
+    done_action = Action(
+        action_type=ActionType.DONE,
+        parameters={"success": True},
+        reasoning="Extraction complete",
+    )
+    _, reward, _, _, _, _ = await env.step(done_action)
+    total_reward += reward
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="complete",
+            url=url,
+            status="completed",
+            message=f"Completed scraping {url}",
+            reward=total_reward,
+            extracted_data=extracted,
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    session["total_reward"] += total_reward
+    session["extracted_data"][url] = extracted
+    _write_session_json_artifact(
+        session,
+        f"{_safe_artifact_name(urlparse(url).netloc or url)}_extracted.json",
+        extracted,
+    )
 
 
 async def _scrape_with_exploration(
