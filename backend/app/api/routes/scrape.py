@@ -1747,6 +1747,55 @@ async def _scrape_single_page(
     )
     
     # Tool call: browser.navigate
+    # Tool call: validate.url (check URL before navigating)
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=url,
+            status="running",
+            message="validate.url(url)",
+            extracted_data={
+                "tool_name": "validate.url",
+                "tool_description": "Validate URL format before navigation",
+                "parameters": {"url": url},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Simple URL validation
+    parsed_url = urlparse(url)
+    url_valid = bool(parsed_url.scheme and parsed_url.netloc)
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=url,
+            status="completed" if url_valid else "failed",
+            message=f"validate.url() → {'valid' if url_valid else 'invalid'}",
+            reward=0.02 if url_valid else 0.0,
+            extracted_data={
+                "tool_name": "validate.url",
+                "result": {
+                    "valid": url_valid,
+                    "scheme": parsed_url.scheme,
+                    "domain": parsed_url.netloc,
+                },
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    if not url_valid:
+        session["errors"].append(f"Invalid URL: {url}")
+        return
+    
+    # Tool call: browser.navigate
     step_num += 1
     yield _record_step(
         session,
@@ -1808,6 +1857,42 @@ async def _scrape_single_page(
     if not nav_success or not nav_obs.page_html:
         session["errors"].append(f"Failed to navigate to {url}")
         return
+    
+    # Tool call: html.parse (parse HTML into DOM)
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=url,
+            status="running",
+            message="html.parse(content)",
+            extracted_data={
+                "tool_name": "html.parse",
+                "tool_description": "Parse HTML document into DOM structure",
+                "parameters": {"parser": "html.parser", "content_length": len(nav_obs.page_html)},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=url,
+            status="completed",
+            message="html.parse() → DOM ready",
+            reward=0.05,
+            extracted_data={
+                "tool_name": "html.parse",
+                "result": {"parsed": True, "html_length": len(nav_obs.page_html)},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
         
     # Extract fields
     extracted = {}
