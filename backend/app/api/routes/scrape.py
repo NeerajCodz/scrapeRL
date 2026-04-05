@@ -311,6 +311,11 @@ async def format_output(data: dict[str, Any], output_format: OutputFormat, _inst
         return json.dumps(data, indent=2, default=str)
 
     if output_format == OutputFormat.CSV:
+        # Check if there's a pre-formatted csv_output
+        if isinstance(data, dict) and "csv_output" in data:
+            return data["csv_output"]
+        
+        # Check for rows format
         if (
             isinstance(data, dict)
             and isinstance(data.get("rows"), list)
@@ -827,7 +832,26 @@ async def _scrape_github_trending(
     )
     
     nav_obs, reward, _, _, _, nav_info = await env.step(navigate_action)
-    total_reward += reward
+    
+    # Calculate navigation reward (0.5 for successful navigation)
+    nav_reward = 0.5 if nav_obs.page_html else 0.0
+    total_reward += nav_reward
+    
+    # Update the navigation step with actual reward
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="navigate",
+            url=trending_url,
+            status="completed" if nav_obs.page_html else "failed",
+            message=f"Navigated to {trending_url}" if nav_obs.page_html else "Navigation failed",
+            reward=nav_reward,
+            duration_ms=nav_info.get("step_duration_ms", 0),
+            timestamp=_now_iso(),
+        ),
+    )
     
     if not nav_obs.page_html:
         session["errors"].append("Failed to load GitHub trending page")
@@ -845,6 +869,7 @@ async def _scrape_github_trending(
             url=trending_url,
             status="running", 
             message="Extracting trending repositories...",
+            reward=0.1,  # Small reward for starting extraction
             timestamp=_now_iso(),
         ),
     )
@@ -894,7 +919,55 @@ async def _scrape_github_trending(
             logger.warning(f"Failed to parse repo entry: {exc}")
             continue
     
-    # Store results
+    # Calculate extraction reward based on repo count
+    extraction_reward = len(trending_repos) * 0.5 + (1.0 if len(trending_repos) >= 10 else 0.5)
+    total_reward += extraction_reward
+    
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="extract",
+            url=trending_url,
+            status="completed",
+            message=f"Extracted {len(trending_repos)} trending repositories",
+            reward=extraction_reward,
+            extracted_data={"count": len(trending_repos), "repos": trending_repos[:3]},  # Preview only
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Generate clean CSV output
+    csv_buffer = io.StringIO()
+    writer = csv.DictWriter(csv_buffer, fieldnames=["username", "repo_name", "stars", "forks"])
+    writer.writeheader()
+    writer.writerows(trending_repos)
+    clean_csv = csv_buffer.getvalue()
+    
+    # Store the clean CSV directly as extracted data for CSV output format
+    if request.output_format == OutputFormat.CSV:
+        session["extracted_data"] = {
+            "rows": trending_repos,
+            "columns": ["username", "repo_name", "stars", "forks"],
+            "csv_output": clean_csv,
+            "row_count": len(trending_repos),
+            "source": trending_url
+        }
+        session["final_output"] = clean_csv
+    else:
+        session["extracted_data"][trending_url] = {
+            "trending_repositories": trending_repos,
+            "summary": f"Found {len(trending_repos)} trending repos"
+        }
+    
+    _write_session_artifact(session, "trending_repos.csv", clean_csv)
+    
+    # Completion step with final reward
+    complete_reward = 1.0  # Bonus for successful completion
+    total_reward += complete_reward
+    session["total_reward"] = total_reward
+    
     step_num += 1
     yield _record_step(
         session,
@@ -903,27 +976,12 @@ async def _scrape_github_trending(
             action="complete",
             url=trending_url,
             status="completed",
-            message=f"Extracted {len(trending_repos)} trending repositories",
-            reward=total_reward + len(trending_repos) * 0.5,
-            extracted_data={"trending_repos": trending_repos},
+            message=f"Successfully scraped {len(trending_repos)} repos with reward {total_reward:.2f}",
+            reward=complete_reward,
+            extracted_data={"total_reward": total_reward, "repos_found": len(trending_repos)},
             timestamp=_now_iso(),
         ),
     )
-    
-    # Format as CSV
-    if request.output_format == "csv" and trending_repos:
-        csv_buffer = io.StringIO()
-        writer = csv.DictWriter(csv_buffer, fieldnames=["username", "repo_name", "stars", "forks"])
-        writer.writeheader()
-        writer.writerows(trending_repos)
-        
-        session["final_output"] = csv_buffer.getvalue()
-        session["extracted_data"][trending_url] = {
-            "trending_repositories": trending_repos,
-            "csv_output": csv_buffer.getvalue()
-        }
-        
-        _write_session_artifact(session, "trending_repos.csv", csv_buffer.getvalue())
 
 
 async def _scrape_single_page(
@@ -1132,6 +1190,7 @@ async def scrape_stream(
             message=(
                 f"Enabled plugins: {enabled_plugins}" if enabled_plugins else "No plugins enabled"
             ),
+            reward=0.1 if enabled_plugins else 0.0,  # Small reward for plugin setup
             extracted_data={
                 "requested": request.enable_plugins, 
                 "enabled": enabled_plugins, 
@@ -1158,6 +1217,7 @@ async def scrape_stream(
                 action="mcp_search",
                 status="completed",
                 message="Resolved non-URL assets using search/discovery plugin logic",
+                reward=0.2,  # Reward for successful discovery
                 extracted_data={"discoveries": discoveries, "resolved_assets": resolved_assets},
                 timestamp=_now_iso(),
             ),
@@ -1205,6 +1265,7 @@ async def scrape_stream(
             action="planner",
             status="completed",
             message=f"Planner created execution plan for {len(resolved_assets)} assets",
+            reward=0.15,  # Reward for planning
             extracted_data={
                 "assets": resolved_assets,
                 "instructions": request.instructions,
@@ -1254,6 +1315,7 @@ async def scrape_stream(
                     action="planner_python",
                     status="completed",
                     message="Planner agent executed sandbox Python code",
+                    reward=0.1,  # Reward for sandbox execution
                     extracted_data=planner_sandbox.output,
                     timestamp=_now_iso(),
                 ),
@@ -1273,6 +1335,7 @@ async def scrape_stream(
                 url=url,
                 status="running",
                 message=f"Navigator selected source {idx + 1}/{len(resolved_assets)}",
+                reward=0.05,  # Small reward for navigator selection
                 timestamp=_now_iso(),
             ),
         )
@@ -1317,6 +1380,7 @@ async def scrape_stream(
                         url=url,
                         status="completed",
                         message="Navigator agent executed sandbox Python code",
+                        reward=0.1,  # Reward for sandbox navigation
                         extracted_data=navigator_sandbox.output,
                         timestamp=_now_iso(),
                     ),
