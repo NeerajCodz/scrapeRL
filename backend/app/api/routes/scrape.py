@@ -1018,30 +1018,28 @@ def _fallback_navigation_url(
     instructions: str,
     navigation_plan: dict[str, Any],
 ) -> str:
-    """Derive a deterministic navigation URL when LLM planning is unavailable."""
+    """Derive a deterministic navigation URL using plan/template hints when LLM is unavailable."""
 
     normalized = _coerce_url_asset(base_url) or base_url
     if "://" not in normalized:
         normalized = f"https://{normalized}"
 
-    parsed = urlparse(normalized)
-    host = (parsed.netloc or parsed.path).lower()
     instruction_text = (instructions or "").lower()
-    strategy = str(navigation_plan.get("strategy") or "").lower()
-
-    if "github.com" in host and (
-        strategy == "github_trending"
-        or "trending" in instruction_text
-        or ("top" in instruction_text and "repo" in instruction_text)
-    ):
-        return f"{parsed.scheme}://{parsed.netloc}/trending"
-
-    if "reddit.com" in host and (
-        strategy == "reddit_trending"
-        or "trending" in instruction_text
-        or "communit" in instruction_text
-    ):
-        return f"{parsed.scheme}://{parsed.netloc}/r/popular/"
+    plan_targets = navigation_plan.get("target_urls") or []
+    valid_targets = [target for target in plan_targets if isinstance(target, str) and _is_url_asset(target)]
+    if valid_targets:
+        if any(token in instruction_text for token in ("trending", "popular", "top", "latest")):
+            keyword_target = next(
+                (
+                    target
+                    for target in valid_targets
+                    if any(token in target.lower() for token in ("trending", "popular", "explore", "discover", "new"))
+                ),
+                None,
+            )
+            if keyword_target:
+                return keyword_target
+        return valid_targets[0]
 
     return normalized
 
@@ -1061,6 +1059,31 @@ def _requested_columns_from_output_instructions(output_instructions: str | None)
         if candidate and candidate not in columns:
             columns.append(candidate)
     return columns
+
+
+def _enforce_requested_schema(
+    rows: list[dict[str, Any]],
+    output_instructions: str | None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Project extracted rows onto requested columns from output instructions."""
+
+    requested_columns = _requested_columns_from_output_instructions(output_instructions)
+    if not requested_columns:
+        if not rows:
+            return rows, []
+        inferred = list(rows[0].keys())
+        return rows, inferred
+
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        normalized_rows.append({column: row.get(column, "") for column in requested_columns})
+
+    if not normalized_rows:
+        normalized_rows = [{column: "" for column in requested_columns}]
+
+    return normalized_rows, requested_columns
 
 
 def _fallback_extraction_code(output_instructions: str | None) -> str:
@@ -1175,6 +1198,7 @@ SITE TEMPLATE HINT (reference only, not mandatory):
     navigation_prompt = f"""You are a web scraping agent. Analyze the user's request and decide where to navigate.
 
 USER REQUEST:
+- Assets: {request.assets}
 - Target: {url}
 - Instructions: {request.instructions or 'Extract all relevant data'}
 - Desired output format: {request.output_format.value}
@@ -1185,6 +1209,7 @@ USER REQUEST:
 TASK: Decide the best URL to navigate to accomplish this task. Consider:
 - If the user wants trending/popular content, should you go to a trending page?
 - If the user wants specific data, do you need to navigate to a specific section?
+- Use site template hints only as references, never as rigid rules.
 - Return ONLY the URL to navigate to, nothing else.
 
 URL:"""
@@ -1494,6 +1519,7 @@ URL:"""
     extraction_prompt = f"""You are a web scraping expert. Generate Python code to extract data from HTML.
 
 USER REQUEST:
+- Assets: {request.assets}
 - Instructions: {request.instructions or 'Extract all relevant data'}
 - Output format: {request.output_format.value}
 - Output instructions: {request.output_instructions or 'All available data'}
@@ -1514,6 +1540,7 @@ REQUIREMENTS:
 4. Column names MUST exactly match: {request.output_instructions.replace('csv of ', '').split(', ') if request.output_instructions else []}
 5. Handle missing data gracefully (use empty string "" for missing fields)
 6. Extract username and repo separately if they appear together (e.g., "user/repo")
+7. Do not include extra columns that were not requested
 
 EXAMPLE OUTPUT FORMAT:
 extracted_data = [
@@ -1600,6 +1627,7 @@ Return ONLY executable Python code, no explanations or markdown:"""
         "BeautifulSoup": BeautifulSoup,
         "extracted_data": [],  # LLM code should populate this
     }
+    output_columns: list[str] = []
     
     try:
         # Execute the LLM-generated code
@@ -1608,6 +1636,10 @@ Return ONLY executable Python code, no explanations or markdown:"""
         
         if not isinstance(extracted_data, list):
             extracted_data = [extracted_data] if extracted_data else []
+        extracted_data, output_columns = _enforce_requested_schema(
+            extracted_data,
+            request.output_instructions,
+        )
         
         exec_reward = 0.5 if extracted_data else 0.1
         total_reward += exec_reward
@@ -1625,6 +1657,7 @@ Return ONLY executable Python code, no explanations or markdown:"""
                     "tool_description": "Execute extraction code in sandbox",
                     "result": {
                         "items_extracted": len(extracted_data),
+                        "columns": output_columns,
                         "sample": extracted_data[:2] if extracted_data else [],
                     },
                 },
@@ -1642,6 +1675,10 @@ Return ONLY executable Python code, no explanations or markdown:"""
             "title": soup.find("title").get_text() if soup.find("title") else "",
             "error": f"Extraction failed: {str(e)}",
         }]
+        extracted_data, output_columns = _enforce_requested_schema(
+            extracted_data,
+            request.output_instructions,
+        )
         total_reward += 0.05
         
         yield _record_step(
@@ -1697,7 +1734,7 @@ Return ONLY executable Python code, no explanations or markdown:"""
         # Generate CSV output
         output_buffer = io.StringIO()
         if extracted_data:
-            fieldnames = list(extracted_data[0].keys())
+            fieldnames = output_columns or list(extracted_data[0].keys())
             writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(extracted_data)
@@ -1705,7 +1742,7 @@ Return ONLY executable Python code, no explanations or markdown:"""
         session["extracted_data"] = {
             "csv_output": output_buffer.getvalue(),
             "rows": extracted_data,
-            "columns": list(extracted_data[0].keys()) if extracted_data else [],
+            "columns": fieldnames if extracted_data else [],
             "row_count": len(extracted_data),
         }
     else:
