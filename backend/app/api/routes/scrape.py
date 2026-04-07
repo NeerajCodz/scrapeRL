@@ -1139,8 +1139,8 @@ URL:"""
     # Step 4: Ask LLM to generate extraction code
     step_num += 1
     
-    # Get a sample of the HTML for LLM analysis (first 5000 chars)
-    html_sample = nav_obs.page_html[:5000]
+    # Get a larger sample of the HTML for LLM analysis (first 15000 chars to include content)
+    html_sample = nav_obs.page_html[:15000]
     
     extraction_prompt = f"""You are a web scraping expert. Generate Python code to extract data from HTML.
 
@@ -1149,33 +1149,37 @@ USER REQUEST:
 - Output format: {request.output_format.value}
 - Output instructions: {request.output_instructions or 'All available data'}
 
-HTML SAMPLE (first 5000 chars):
+HTML SAMPLE (first 15000 chars):
 ```html
 {html_sample}
 ```
 
 {template_hint}
 
-TASK: Generate Python code using BeautifulSoup to extract the requested data. The code should:
-1. Parse the HTML (soup is already provided as `soup` variable)
-2. Extract data matching the user's output_instructions
-3. Return a list of dictionaries with the exact columns specified in output_instructions
-4. Handle missing data gracefully
+TASK: Generate Python code using BeautifulSoup to extract the requested data.
 
 REQUIREMENTS:
-- Return ONLY executable Python code, no explanations
-- Use `soup` variable (already a BeautifulSoup object)
-- Return `extracted_data` as a list of dictionaries
-- Column names MUST match what the user requested in output_instructions
-- Example: if user wants "csv of username, repo, stars", return dicts with keys: username, repo, stars
+1. The `soup` variable is already provided as a BeautifulSoup object
+2. Extract data matching the user's output_instructions: "{request.output_instructions}"
+3. Return `extracted_data` as a list of dictionaries
+4. Column names MUST exactly match: {request.output_instructions.replace('csv of ', '').split(', ') if request.output_instructions else []}
+5. Handle missing data gracefully (use empty string "" for missing fields)
+6. Extract username and repo separately if they appear together (e.g., "user/repo")
 
-CODE:"""
+EXAMPLE OUTPUT FORMAT:
+extracted_data = [
+    {{"username": "google", "repo": "tensorflow", "stars": "12345", "forks": "6789"}},
+    {{"username": "microsoft", "repo": "vscode", "stars": "11111", "forks": "2222"}},
+]
+
+Return ONLY executable Python code, no explanations or markdown:"""
 
     try:
         code_response = await model_router.complete(
             messages=[{"role": "user", "content": extraction_prompt}],
             task_type=TaskType.CODE,
             model=request.model,
+            temperature=0.3,  # Lower temperature for more deterministic code
         )
         
         # Extract code from response (handle markdown code blocks)
@@ -1276,6 +1280,7 @@ CODE:"""
         
     except Exception as e:
         logger.error(f"Extraction code execution failed: {e}")
+        logger.error(f"Generated code was:\n{extraction_code}")
         # Fallback: basic extraction
         extracted_data = [{
             "url": target_url,
