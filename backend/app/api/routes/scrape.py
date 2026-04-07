@@ -702,9 +702,13 @@ def _extract_markdown_link_rows(
     
     # Patterns for extracting content
     # Match markdown links like [Title](URL) but NOT image links like ![Image](URL)
-    content_link_pattern = re.compile(r'(?<!!)\[([^\]]+)\]\((https?://[^)]+)\)')
-    # Match view counts anywhere
-    views_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*views?', re.IGNORECASE)
+    # URL ends at first space, quote, or closing paren
+    content_link_pattern = re.compile(r'(?<!!)\[([^\]]+)\]\((https?://[^\s"\)]+)')
+    # Match complex links with embedded images: [![Image](img_url) Text](link_url)
+    # This captures the text after the image and the final link
+    complex_link_pattern = re.compile(r'\[!\[Image[^\]]*\]\([^\)]+\)\s*([^\]]+)\]\((https?://[^\s"\)]+)\)')
+    # Match view/viewer counts anywhere (including "47.2K viewers" format)
+    views_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*(?:views?|viewers?)', re.IGNORECASE)
     likes_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*likes?', re.IGNORECASE)
     comments_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*comments?', re.IGNORECASE)
     date_pattern = re.compile(r'\b(today|yesterday|\d+\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\s+ago)\b', re.IGNORECASE)
@@ -753,6 +757,57 @@ def _extract_markdown_link_rows(
         # Skip pure navigation/boilerplate lines
         if any(label == lowered_line for label in boilerplate_labels):
             continue
+        
+        # First check for complex links (like Twitch format: [![Image](url) StreamerName Game Live 22K viewers](channel_url))
+        complex_match = complex_link_pattern.search(line)
+        if complex_match:
+            embedded_text = complex_match.group(1).strip()
+            link = complex_match.group(2).strip()
+            
+            # Parse embedded text: "StreamerName Game Live 22K 22K viewers Use the..."
+            # Remove "Use the..." suffix and Hype Train info
+            embedded_text = re.sub(r'\s*Use the.*$', '', embedded_text)
+            embedded_text = re.sub(r'\s*Hype Train.*$', '', embedded_text, flags=re.IGNORECASE)
+            # Extract viewer count first
+            viewer_match = views_pattern.search(embedded_text)
+            viewers = viewer_match.group(1) if viewer_match else ""
+            # Remove ALL occurrences of viewer count patterns, including orphan "ers"/"viewers"
+            name_game = re.sub(r'\d+(?:[.,]\d+)?[KkMmBb]?\s*(?:views?|viewers?|ers)?', '', embedded_text, flags=re.IGNORECASE)
+            # Remove standalone "ers" or "viewers" that might remain
+            name_game = re.sub(r'\b(?:ers|viewers?|views?)\b', '', name_game, flags=re.IGNORECASE)
+            # Remove "Live" 
+            name_game = re.sub(r'\bLive\b', '', name_game, flags=re.IGNORECASE)
+            # Collapse whitespace
+            name_game = re.sub(r'\s+', ' ', name_game).strip()
+            
+            # Split into name and game (heuristic: first word is name, rest is game)
+            parts = name_game.split(maxsplit=1)
+            streamer_name = parts[0] if parts else ""
+            game = parts[1].strip() if len(parts) > 1 else ""
+            
+            if streamer_name and link:
+                link_normalized = link.split('?')[0]
+                if link_normalized not in seen_links:
+                    seen_links.add(link_normalized)
+                    
+                    row: dict[str, Any] = {}
+                    for col in columns:
+                        lower_col = col.lower()
+                        if lower_col in {"url", "link", "href", "channel"}:
+                            row[col] = link
+                        elif lower_col in {"title", "name", "streamer_name", "streamer", "username"}:
+                            row[col] = streamer_name
+                        elif lower_col in {"game", "category", "playing"}:
+                            row[col] = game
+                        elif lower_col in {"views", "view_count", "viewers", "viewer_count"}:
+                            row[col] = viewers
+                        else:
+                            row[col] = ""
+                    
+                    # Streams with viewers are highly relevant
+                    score = 5 if viewers else 2
+                    candidate_rows.append((score, row))
+                    continue  # Move to next line
         
         # Find content links (not images)
         for match in content_link_pattern.finditer(line):
@@ -847,30 +902,58 @@ def _extract_markdown_link_rows(
             candidate_rows.append((quality_score, row))
     
     # Also look for standalone lines with view counts (sometimes titles are separate from links)
-    for i, views in line_views.items():
-        if i > 0:
-            prev_line = lines[i - 1].strip()
-            # Check if previous line might be a title
-            if len(prev_line) > 20 and not prev_line.startswith("![") and not prev_line.startswith("http"):
-                title_normalized = prev_line.lower()[:50]
-                if title_normalized not in seen_titles:
-                    row = {}
-                    for col in columns:
-                        lower_col = col.lower()
-                        if lower_col in {"title", "name", "text"}:
-                            row[col] = prev_line[:160]
-                        elif lower_col in {"views", "view_count", "viewers"}:
-                            row[col] = views
-                        elif lower_col in {"url", "link", "href"}:
-                            row[col] = source_url
-                        else:
-                            row[col] = ""
-                    seen_titles.add(title_normalized)
-                    candidate_rows.append((2, row))  # Lower score for these
+    # But only if we haven't found enough rows with proper links
+    if len(candidate_rows) < row_limit:
+        for i, views in line_views.items():
+            if i > 0 and len(candidate_rows) < row_limit * 2:
+                prev_line = lines[i - 1].strip()
+                # Check if previous line might be a title
+                if len(prev_line) > 20 and not prev_line.startswith("![") and not prev_line.startswith("http"):
+                    title_normalized = prev_line.lower()[:50]
+                    if title_normalized not in seen_titles:
+                        # Look for a nearby link
+                        nearby_link = None
+                        for offset in range(-3, 4):
+                            check_idx = i + offset
+                            if 0 <= check_idx < len(lines):
+                                link_match = content_link_pattern.search(lines[check_idx])
+                                if link_match and "watch" in link_match.group(2).lower():
+                                    nearby_link = link_match.group(2)
+                                    break
+                        
+                        if nearby_link:  # Only add if we found a real link
+                            row = {}
+                            for col in columns:
+                                lower_col = col.lower()
+                                if lower_col in {"title", "name", "text"}:
+                                    row[col] = prev_line[:160]
+                                elif lower_col in {"views", "view_count", "viewers"}:
+                                    row[col] = views
+                                elif lower_col in {"url", "link", "href"}:
+                                    row[col] = nearby_link
+                                else:
+                                    row[col] = ""
+                            seen_titles.add(title_normalized)
+                            candidate_rows.append((2, row))  # Lower score for these
     
-    # Sort by score and return top rows
+    # Sort by score (higher is better) and filter out items without views when we have enough with views
     candidate_rows.sort(key=lambda x: x[0], reverse=True)
-    return [row for _, row in candidate_rows[:row_limit]]
+    
+    # Prefer rows with views
+    with_views = [(score, row) for score, row in candidate_rows if row.get("views") or row.get("view_count")]
+    without_views = [(score, row) for score, row in candidate_rows if not (row.get("views") or row.get("view_count"))]
+    
+    result = []
+    for _, row in with_views[:row_limit]:
+        result.append(row)
+    
+    # Fill remaining slots with rows without views
+    remaining = row_limit - len(result)
+    if remaining > 0:
+        for _, row in without_views[:remaining]:
+            result.append(row)
+    
+    return result
 
 
 def _extract_rows_from_text_render(
