@@ -110,3 +110,24 @@
 - Duration: **1.8 seconds** (deterministic offline fixture mode)
 
 Raw summary: `docs/reports/non-template-existing-summary.json`.
+
+---
+
+## Additional Run: Strict Output Contract Matrix (100 Template + 100 Non-Template)
+
+- Template cases: **100**
+- Non-template cases: **100**
+- Total cases: **200**
+- Modes: mixed **csv/json/text**
+- Max steps configured per case: **999** (effectively unlimited)
+- Completed: **200**
+- Partial: **0**
+- Failed: **0**
+- Contract failures (requested schema mismatch): **0**
+
+### Contract checks enforced per case
+- CSV: returned `columns` must **exactly equal** requested CSV columns (order + names), and CSV header must match.
+- JSON: first row keys must **exactly equal** requested JSON columns (order + names).
+- Text/question: output must be non-empty.
+
+Raw summary: `docs/reports/output-contract-200-summary.json`.

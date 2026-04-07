@@ -1,0 +1,11 @@
+{
+  "template_cases": 100,
+  "non_template_cases": 100,
+  "total_cases": 200,
+  "completed": 200,
+  "partial": 0,
+  "failed": 0,
+  "contract_failures": 0,
+  "failures": [],
+  "duration_seconds": 5.69
+}
