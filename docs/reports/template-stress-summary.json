@@ -1,0 +1,383 @@
+{
+  "iterations_per_target": 100,
+  "template_count": 56,
+  "non_template_target_count": 5,
+  "total_runs": 6100,
+  "completed_runs": 6100,
+  "partial_runs": 0,
+  "failed_runs": 0,
+  "schema_failures": 0,
+  "format_failures": 0,
+  "error_samples": [],
+  "template_results": {
+    "github": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "reddit": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "x": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "youtube": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "instagram": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "facebook": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "linkedin": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "tiktok": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "medium": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "devto": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "stackoverflow": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "kaggle": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "huggingface": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "arxiv": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "wikipedia": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "pypi": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "npm": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "producthunt": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "hackernews": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "substack": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "quora": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "pinterest": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "imdb": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "nytimes": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "bbc": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "cnn": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "reuters": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "bloomberg": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "coinmarketcap": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "coindesk": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "investopedia": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "googlescholar": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "gitlab": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "bitbucket": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "amazon": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "ebay": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "walmart": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "etsy": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "aliexpress": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "coursera": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "udemy": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "edx": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "freecodecamp": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "paperswithcode": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "openreview": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "leetcode": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "geeksforgeeks": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "indeed": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "glassdoor": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "twitch": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "vimeo": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "spotify": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "soundcloud": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "airbnb": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "booking": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "zillow": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    }
+  },
+  "non_template_results": {
+    "https://unknown-synth-alpha.test": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "https://unknown-synth-beta.test": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "https://unknown-synth-gamma.test": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "open source scraping tools benchmark": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    },
+    "synthetic market intelligence dashboard comparison": {
+      "runs": 100,
+      "completed": 100,
+      "partial": 0,
+      "failed": 0
+    }
+  },
+  "duration_seconds": 81.16
+}
