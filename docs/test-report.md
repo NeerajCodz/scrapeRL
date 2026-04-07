@@ -94,3 +94,19 @@
 - Agent flow evaluates **assets + instructions + output_format + output_instructions** per request.
 - Output schema validation checks strict column adherence for CSV/JSON runs.
 - Raw machine summary: `docs/reports/template-stress-summary.json`.
+
+---
+
+## Additional Run: Non-Template Existing Domains (Question/CSV/JSON)
+
+- Target domains: **35** (non-template existing sites)
+- Output modes: **question**, **csv**, **json**
+- Total cases: **105** (35 × 3)
+- Completed: **105**
+- Partial: **0**
+- Failed: **0**
+- Schema failures: **0**
+- Output-format mismatches: **0**
+- Duration: **1.8 seconds** (deterministic offline fixture mode)
+
+Raw summary: `docs/reports/non-template-existing-summary.json`.

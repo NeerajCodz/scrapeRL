@@ -1,0 +1,11 @@
+{
+  "target_count": 35,
+  "cases": 105,
+  "completed": 105,
+  "partial": 0,
+  "failed": 0,
+  "schema_failures": 0,
+  "format_failures": 0,
+  "failures": [],
+  "duration_seconds": 1.8
+}
