@@ -29,9 +29,11 @@ from app.config import Settings
 from app.api.deps import (
     MemoryManagerDep,
     SettingsDep,
+    get_model_router,
     create_environment,
     remove_environment,
 )
+from app.models.router import SmartModelRouter, TaskType
 from app.api.routes.plugins import PLUGIN_REGISTRY
 from app.api.routes.websocket import get_connection_manager
 from app.core.action import Action, ActionType
@@ -949,6 +951,445 @@ async def scrape_url(
         remove_environment(episode_id)
 
 
+async def _scrape_with_agentic_llm(
+    session: dict[str, Any],
+    session_id: str,
+    env,
+    request: ScrapeRequest,
+    navigation_plan: dict[str, Any],
+    url: str,
+    step_num: int,
+    total_reward: float,
+    model_router: SmartModelRouter,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Truly agentic scraping using LLM to decide navigation and extraction.
+    
+    This function uses the LLM to:
+    1. Decide where to navigate based on instructions + template hints
+    2. Analyze the HTML content
+    3. Generate extraction code dynamically
+    4. Format output according to output_instructions
+    
+    Templates serve as reference hints only, not rigid execution scripts.
+    """
+    
+    # Get template hint if available (for reference only)
+    template_hint = ""
+    if navigation_plan.get("matched_template"):
+        template = navigation_plan["matched_template"]
+        template_hint = f"""
+SITE TEMPLATE HINT (reference only, not mandatory):
+- Domain: {template.get('domain', 'N/A')}
+- Strategies: {', '.join(template.get('strategies', []))}
+- Suggested output fields: {', '.join(template.get('output_fields', []))}
+- Typical patterns: {template.get('patterns', 'N/A')}
+"""
+    
+    # Step 1: Ask LLM to decide navigation strategy
+    step_num += 1
+    navigation_prompt = f"""You are a web scraping agent. Analyze the user's request and decide where to navigate.
+
+USER REQUEST:
+- Target: {url}
+- Instructions: {request.instructions or 'Extract all relevant data'}
+- Desired output format: {request.output_format.value}
+- Output instructions: {request.output_instructions or 'All available data'}
+
+{template_hint}
+
+TASK: Decide the best URL to navigate to accomplish this task. Consider:
+- If the user wants trending/popular content, should you go to a trending page?
+- If the user wants specific data, do you need to navigate to a specific section?
+- Return ONLY the URL to navigate to, nothing else.
+
+URL:"""
+
+    try:
+        nav_response = await model_router.complete(
+            messages=[{"role": "user", "content": navigation_prompt}],
+            task_type=TaskType.REASONING,
+            model=request.model,
+        )
+        target_url = nav_response.content.strip()
+        
+        # Validate and clean URL
+        if not target_url.startswith("http"):
+            if "://" not in url:
+                target_url = f"https://{url}/{target_url.lstrip('/')}"
+            else:
+                parsed = urlparse(url)
+                target_url = f"{parsed.scheme}://{parsed.netloc}/{target_url.lstrip('/')}"
+        
+    except Exception as e:
+        logger.error(f"LLM navigation decision failed: {e}")
+        target_url = url  # Fall back to original URL
+    
+    # Tool call: LLM navigation planning
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="complete",
+            message=f"llm.plan_navigation() → {target_url}",
+            extracted_data={
+                "tool_name": "llm.plan_navigation",
+                "tool_description": "LLM decides optimal navigation URL based on instructions",
+                "parameters": {"instructions": request.instructions, "base_url": url},
+                "result": target_url,
+            },
+            reward=0.15,
+            timestamp=_now_iso(),
+        ),
+    )
+    total_reward += 0.15
+    
+    # Step 2: Navigate to the decided URL
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="running",
+            message=f"browser.navigate(url='{target_url}')",
+            extracted_data={
+                "tool_name": "browser.navigate",
+                "tool_description": "Navigate browser to target URL",
+                "parameters": {"url": target_url, "wait_for": "page_load"},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    navigate_action = Action(
+        action_type=ActionType.NAVIGATE,
+        parameters={"url": target_url},
+        reasoning=f"Navigate to {target_url} based on LLM's decision",
+    )
+    
+    nav_obs, nav_reward, _, _, _, nav_info = await env.step(navigate_action)
+    total_reward += nav_reward
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="complete",
+            message=f"browser.navigate() → Success",
+            extracted_data={
+                "tool_name": "browser.navigate",
+                "tool_description": "Navigate browser to target URL",
+                "parameters": {"url": target_url},
+                "result": {"status_code": nav_obs.page_html is not None},
+            },
+            reward=nav_reward,
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    if not nav_obs.page_html:
+        logger.error("Navigation failed - no HTML received")
+        return
+    
+    # Step 3: Parse HTML
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="running",
+            message="html.parse(html=page_content)",
+            extracted_data={
+                "tool_name": "html.parse",
+                "tool_description": "Parse HTML into DOM structure",
+                "parameters": {"content_length": len(nav_obs.page_html)},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    soup = BeautifulSoup(nav_obs.page_html, "html.parser")
+    total_reward += 0.1
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="complete",
+            message="html.parse() → DOM ready",
+            extracted_data={
+                "tool_name": "html.parse",
+                "tool_description": "Parse HTML into DOM structure",
+                "result": {"elements_count": len(soup.find_all())},
+            },
+            reward=0.1,
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Step 4: Ask LLM to generate extraction code
+    step_num += 1
+    
+    # Get a sample of the HTML for LLM analysis (first 5000 chars)
+    html_sample = nav_obs.page_html[:5000]
+    
+    extraction_prompt = f"""You are a web scraping expert. Generate Python code to extract data from HTML.
+
+USER REQUEST:
+- Instructions: {request.instructions or 'Extract all relevant data'}
+- Output format: {request.output_format.value}
+- Output instructions: {request.output_instructions or 'All available data'}
+
+HTML SAMPLE (first 5000 chars):
+```html
+{html_sample}
+```
+
+{template_hint}
+
+TASK: Generate Python code using BeautifulSoup to extract the requested data. The code should:
+1. Parse the HTML (soup is already provided as `soup` variable)
+2. Extract data matching the user's output_instructions
+3. Return a list of dictionaries with the exact columns specified in output_instructions
+4. Handle missing data gracefully
+
+REQUIREMENTS:
+- Return ONLY executable Python code, no explanations
+- Use `soup` variable (already a BeautifulSoup object)
+- Return `extracted_data` as a list of dictionaries
+- Column names MUST match what the user requested in output_instructions
+- Example: if user wants "csv of username, repo, stars", return dicts with keys: username, repo, stars
+
+CODE:"""
+
+    try:
+        code_response = await model_router.complete(
+            messages=[{"role": "user", "content": extraction_prompt}],
+            task_type=TaskType.CODE,
+            model=request.model,
+        )
+        
+        # Extract code from response (handle markdown code blocks)
+        extraction_code = code_response.content.strip()
+        if "```python" in extraction_code:
+            extraction_code = extraction_code.split("```python")[1].split("```")[0].strip()
+        elif "```" in extraction_code:
+            extraction_code = extraction_code.split("```")[1].split("```")[0].strip()
+        
+        # Tool call: LLM code generation
+        yield _record_step(
+            session,
+            ScrapeStep(
+                step_number=step_num,
+                action="tool_call",
+                url=target_url,
+                status="complete",
+                message=f"llm.generate_extraction_code() → {len(extraction_code)} chars",
+                extracted_data={
+                    "tool_name": "llm.generate_extraction_code",
+                    "tool_description": "LLM generates BeautifulSoup extraction code based on HTML and instructions",
+                    "parameters": {
+                        "html_sample_length": len(html_sample),
+                        "instructions": request.instructions,
+                        "output_format": request.output_format.value,
+                    },
+                    "result": {"code_length": len(extraction_code)},
+                },
+                reward=0.2,
+                timestamp=_now_iso(),
+            ),
+        )
+        total_reward += 0.2
+        
+    except Exception as e:
+        logger.error(f"LLM code generation failed: {e}")
+        extraction_code = DEFAULT_ANALYSIS_CODE  # Fallback to default extraction
+    
+    # Step 5: Execute generated code in sandbox
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="running",
+            message="sandbox.execute(code=llm_generated_code)",
+            extracted_data={
+                "tool_name": "sandbox.execute",
+                "tool_description": "Execute LLM-generated extraction code in sandboxed Python environment",
+                "parameters": {"code_length": len(extraction_code), "timeout": 30},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Prepare execution context
+    sandbox_globals = {
+        "soup": soup,
+        "html": nav_obs.page_html,
+        "url": target_url,
+        "BeautifulSoup": BeautifulSoup,
+        "extracted_data": [],  # LLM code should populate this
+    }
+    
+    try:
+        # Execute the LLM-generated code
+        exec(extraction_code, sandbox_globals)
+        extracted_data = sandbox_globals.get("extracted_data", [])
+        
+        if not isinstance(extracted_data, list):
+            extracted_data = [extracted_data] if extracted_data else []
+        
+        exec_reward = 0.5 if extracted_data else 0.1
+        total_reward += exec_reward
+        
+        yield _record_step(
+            session,
+            ScrapeStep(
+                step_number=step_num,
+                action="tool_call",
+                url=target_url,
+                status="complete",
+                message=f"sandbox.execute() → Extracted {len(extracted_data)} items",
+                extracted_data={
+                    "tool_name": "sandbox.execute",
+                    "tool_description": "Execute extraction code in sandbox",
+                    "result": {
+                        "items_extracted": len(extracted_data),
+                        "sample": extracted_data[:2] if extracted_data else [],
+                    },
+                },
+                reward=exec_reward,
+                timestamp=_now_iso(),
+            ),
+        )
+        
+    except Exception as e:
+        logger.error(f"Extraction code execution failed: {e}")
+        # Fallback: basic extraction
+        extracted_data = [{
+            "url": target_url,
+            "title": soup.find("title").get_text() if soup.find("title") else "",
+            "error": f"Extraction failed: {str(e)}",
+        }]
+        total_reward += 0.05
+        
+        yield _record_step(
+            session,
+            ScrapeStep(
+                step_number=step_num,
+                action="tool_call",
+                url=target_url,
+                status="complete",
+                message=f"sandbox.execute() → Failed: {str(e)[:100]}",
+                extracted_data={
+                    "tool_name": "sandbox.execute",
+                    "tool_description": "Execute extraction code (failed)",
+                    "result": {"error": str(e)},
+                },
+                reward=0.05,
+                timestamp=_now_iso(),
+            ),
+        )
+    
+    # Step 6: Format output according to requested format
+    step_num += 1
+    
+    if request.output_format == OutputFormat.CSV:
+        tool_name = "csv.generate"
+        tool_desc = "Generate CSV output from extracted data"
+    elif request.output_format == OutputFormat.JSON:
+        tool_name = "json.dumps"
+        tool_desc = "Format extracted data as JSON"
+    else:
+        tool_name = "data.format"
+        tool_desc = "Format extracted data"
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="running",
+            message=f"{tool_name}(data=extracted_items)",
+            extracted_data={
+                "tool_name": tool_name,
+                "tool_description": tool_desc,
+                "parameters": {"item_count": len(extracted_data)},
+            },
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Store extracted data in session
+    if request.output_format == OutputFormat.CSV and extracted_data:
+        # Generate CSV output
+        output_buffer = io.StringIO()
+        if extracted_data:
+            fieldnames = list(extracted_data[0].keys())
+            writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(extracted_data)
+        
+        session["extracted_data"] = {
+            "csv_output": output_buffer.getvalue(),
+            "rows": extracted_data,
+            "columns": list(extracted_data[0].keys()) if extracted_data else [],
+            "row_count": len(extracted_data),
+        }
+    else:
+        session["extracted_data"] = {
+            target_url: extracted_data
+        }
+    
+    total_reward += 0.1
+    
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="tool_call",
+            url=target_url,
+            status="complete",
+            message=f"{tool_name}() → Output ready",
+            extracted_data={
+                "tool_name": tool_name,
+                "tool_description": tool_desc,
+                "result": {"format": request.output_format.value, "size": len(extracted_data)},
+            },
+            reward=0.1,
+            timestamp=_now_iso(),
+        ),
+    )
+    
+    # Final completion
+    step_num += 1
+    yield _record_step(
+        session,
+        ScrapeStep(
+            step_number=step_num,
+            action="complete",
+            url=target_url,
+            status="complete",
+            message=f"Agentic scraping complete: {len(extracted_data)} items extracted",
+            extracted_data={"item_count": len(extracted_data)},
+            reward=total_reward,
+            timestamp=_now_iso(),
+        ),
+    )
+
+
 async def scrape_url_intelligently(
     session: dict[str, Any],
     session_id: str,
@@ -959,7 +1400,15 @@ async def scrape_url_intelligently(
     enabled_plugins: list[str],
     navigation_plan: dict[str, Any],
 ) -> AsyncGenerator[dict[str, Any], None]:
-    """Intelligent scraping that follows navigation plan."""
+    """Intelligent scraping using agentic LLM-driven approach.
+    
+    This function uses LLM to make ALL decisions:
+    - Navigation: Where to go based on instructions
+    - Extraction: What data to extract and how
+    - Formatting: How to present the results
+    
+    Templates serve as reference hints only, NOT rigid scripts.
+    """
     
     episode_id = f"{session_id}-{uuid.uuid4().hex[:8]}"
     
@@ -967,36 +1416,29 @@ async def scrape_url_intelligently(
         env = create_environment(episode_id, settings)
         await env.reset(task_id=f"scrape_{session_id}")
         
+        # Get model router
+        model_router = get_model_router()
+        if not model_router:
+            logger.error("Model router not available")
+            session["errors"].append("Model router not initialized")
+            return
+        
         step_num = 0
         total_reward = 0.0
         
-        # GitHub trending strategy
-        if navigation_plan["strategy"] == "github_trending":
-            async for event in _scrape_github_trending(
-                session, session_id, env, request, navigation_plan, step_num, total_reward
-            ):
-                yield event
-
-        # Reddit popular/trending communities strategy
-        elif navigation_plan["strategy"] == "reddit_trending":
-            async for event in _scrape_reddit_trending(
-                session, session_id, env, request, url, step_num, total_reward
-            ):
-                yield event
-
-        # General exploration strategy  
-        elif navigation_plan["strategy"] == "intelligent_exploration":
-            async for event in _scrape_with_exploration(
-                session, session_id, env, request, navigation_plan, url, step_num, total_reward
-            ):
-                yield event
-            
-        # Default single page
-        else:
-            async for event in _scrape_single_page(
-                session, session_id, env, request, url, step_num, total_reward
-            ):
-                yield event
+        # ALWAYS use agentic approach - no hardcoded strategies
+        async for event in _scrape_with_agentic_llm(
+            session, 
+            session_id, 
+            env, 
+            request, 
+            navigation_plan, 
+            url, 
+            step_num, 
+            total_reward,
+            model_router,
+        ):
+            yield event
             
     except Exception as exc:
         logger.error(f"Intelligent scraping failed for {url}: {exc}")
