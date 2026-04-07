@@ -54,3 +54,24 @@ def test_registry_serialization_covers_all_templates() -> None:
     serialized_ids = {item["site_id"] for item in serialized}
     template_ids = {template.site_id for template in SITE_TEMPLATES}
     assert serialized_ids == template_ids
+
+
+def test_alias_matching_avoids_single_char_false_positive() -> None:
+    """Single-character aliases should not match inside larger words (e.g. 'x' in 'extract')."""
+
+    matched = match_site_template(
+        "Find and extract top scraping frameworks with details",
+        ["open source scraping frameworks comparison"],
+    )
+    assert matched is None
+
+
+def test_alias_matching_still_supports_explicit_x_reference() -> None:
+    """Explicit references to X should still match the X template."""
+
+    matched = match_site_template(
+        "Get top posts from x today",
+        ["social trend query"],
+    )
+    assert matched is not None
+    assert matched.site_id == "x"

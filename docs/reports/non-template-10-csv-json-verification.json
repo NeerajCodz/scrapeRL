@@ -1,0 +1,198 @@
+{
+  "sites": 10,
+  "csv_pass": 10,
+  "json_pass": 10,
+  "combined_pass": 10,
+  "results": [
+    {
+      "site": "https://python.org/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nPython,https://python.org/,Python\nPSF,https://www.python.org/psf/,PSF",
+      "sample_json": "[{\"title\": \"Python\", \"url\": \"https://python.org/\", \"content\": \"Python\"}, {\"title\": \"PSF\", \"url\": \"https://www.python.org/psf/\", \"content\": \"PSF\"}]"
+    },
+    {
+      "site": "https://pypi.org/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nDocs,https://docs.pypi.org/,Docs\nSponsors,https://pypi.org/sponsors/,Sponsors",
+      "sample_json": "[{\"title\": \"Docs\", \"url\": \"https://docs.pypi.org/\", \"content\": \"Docs\"}, {\"title\": \"Sponsors\", \"url\": \"https://pypi.org/sponsors/\", \"content\": \"Sponsors\"}]"
+    },
+    {
+      "site": "https://kubernetes.io/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nKubernetes,https://kubernetes.io/,Kubernetes\nDocumentation,https://kubernetes.io/docs/home/,Documentation",
+      "sample_json": "[{\"title\": \"Kubernetes\", \"url\": \"https://kubernetes.io/\", \"content\": \"Kubernetes\"}, {\"title\": \"Documentation\", \"url\": \"https://kubernetes.io/docs/home/\", \"content\": \"Documentation\"}]"
+    },
+    {
+      "site": "https://huggingface.co/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nHugging Face,https://huggingface.co/,Hugging Face\nModels,https://huggingface.co/models,Models",
+      "sample_json": "[{\"title\": \"Hugging Face\", \"url\": \"https://huggingface.co/\", \"content\": \"Hugging Face\"}, {\"title\": \"Models\", \"url\": \"https://huggingface.co/models\", \"content\": \"Models\"}]"
+    },
+    {
+      "site": "https://news.ycombinator.com/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nHacker News,https://news.ycombinator.com/news,Hacker News new | past | comments | ask | show | jobs | submit login\nnew,https://news.ycombinator.com/newest,Hacker News new | past | comments | ask | show | jobs | submit login",
+      "sample_json": "[{\"title\": \"Hacker News\", \"url\": \"https://news.ycombinator.com/news\", \"content\": \"Hacker News new | past | comments | ask | show | jobs | submit login\"}, {\"title\": \"new\", \"url\": \"https://news.ycombinator.com/newest\", \"content\": \"Hacker News new | past | comments | ask | show | jobs | submit login\"}]"
+    },
+    {
+      "site": "https://docs.docker.com/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 6,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nGet started,https://docs.docker.com/get-started/,Get started\nGuides,https://docs.docker.com/guides/,Guides",
+      "sample_json": "[{\"title\": \"Get started\", \"url\": \"https://docs.docker.com/get-started/\", \"content\": \"Get started\"}, {\"title\": \"Guides\", \"url\": \"https://docs.docker.com/guides/\", \"content\": \"Guides\"}]"
+    },
+    {
+      "site": "https://mozilla.org/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nProducts,https://mozilla.org/en-US/products/,Products\nMozilla VPN,https://mozilla.org/en-US/products/vpn/,Mozilla VPN",
+      "sample_json": "[{\"title\": \"Products\", \"url\": \"https://mozilla.org/en-US/products/\", \"content\": \"Products\"}, {\"title\": \"Mozilla VPN\", \"url\": \"https://mozilla.org/en-US/products/vpn/\", \"content\": \"Mozilla VPN\"}]"
+    },
+    {
+      "site": "https://go.dev/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nCase Studies,https://go.dev/solutions/case-studies,Case Studies\nUse Cases,https://go.dev/solutions/use-cases,Use Cases",
+      "sample_json": "[{\"title\": \"Case Studies\", \"url\": \"https://go.dev/solutions/case-studies\", \"content\": \"Case Studies\"}, {\"title\": \"Use Cases\", \"url\": \"https://go.dev/solutions/use-cases\", \"content\": \"Use Cases\"}]"
+    },
+    {
+      "site": "https://example.com/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 1,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 1,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nLearn more,https://iana.org/domains/example,Example Domain This domain is for use in documentation examples without needing permission. Avoid use in operations. Learn more",
+      "sample_json": "[{\"title\": \"Learn more\", \"url\": \"https://iana.org/domains/example\", \"content\": \"Example Domain This domain is for use in documentation examples without needing permission. Avoid use in operations. Learn more\"}]"
+    },
+    {
+      "site": "https://www.w3.org/",
+      "csv_header": [
+        "title",
+        "url",
+        "content"
+      ],
+      "csv_rows": 5,
+      "json_keys": [
+        "title",
+        "url",
+        "content"
+      ],
+      "json_rows": 5,
+      "csv_ok": true,
+      "json_ok": true,
+      "sample_csv": "title,url,content\nNews,https://www.w3.org/news/,\"Latest news Latest entries from across our News , Press Releases or Blog .\"\nPress Releases,https://www.w3.org/press-releases/,\"Latest news Latest entries from across our News , Press Releases or Blog .\"",
+      "sample_json": "[{\"title\": \"News\", \"url\": \"https://www.w3.org/news/\", \"content\": \"Latest news Latest entries from across our News , Press Releases or Blog .\"}, {\"title\": \"Press Releases\", \"url\": \"https://www.w3.org/press-releases/\", \"content\": \"Latest news Latest entries from across our News , Press Releases or Blog .\"}]"
+    }
+  ]
+}

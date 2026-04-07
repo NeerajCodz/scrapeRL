@@ -90,6 +90,21 @@ def _extract_domains_from_assets(assets: list[str]) -> list[str]:
     return domains
 
 
+def _instruction_contains_alias(instructions_lower: str, token: str) -> bool:
+    """Return True when an alias token is present as a semantic token, not a substring artifact."""
+
+    alias = token.strip().lower()
+    if not alias:
+        return False
+
+    if " " in alias:
+        return alias in instructions_lower
+
+    # Avoid one-letter alias false positives (e.g. "x" in "extract").
+    pattern = rf"(^|[^a-z0-9]){re.escape(alias)}([^a-z0-9]|$)"
+    return re.search(pattern, instructions_lower) is not None
+
+
 def match_site_template(instructions: str, assets: list[str]) -> SiteTemplate | None:
     """Match site template by URL domain first, then instruction aliases."""
 
@@ -106,7 +121,7 @@ def match_site_template(instructions: str, assets: list[str]) -> SiteTemplate | 
     # Alias fallback
     for template in SITE_TEMPLATES:
         alias_tokens = [template.name.lower(), template.site_id.lower(), *[alias.lower() for alias in template.aliases]]
-        if any(token and token in instructions_lower for token in alias_tokens):
+        if any(_instruction_contains_alias(instructions_lower, token) for token in alias_tokens):
             return template
 
     return None

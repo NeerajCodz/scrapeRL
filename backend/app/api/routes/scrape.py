@@ -18,7 +18,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from bs4 import BeautifulSoup
@@ -573,7 +573,7 @@ def _coerce_url_asset(asset: str) -> str | None:
 
 
 def _discover_assets_for_query(query: str) -> list[str]:
-    """Resolve non-URL query assets using deterministic fallbacks."""
+    """Resolve non-URL query assets using deterministic query-aware fallbacks."""
 
     query_l = query.lower()
     if "gold" in query_l and ("price" in query_l or "trend" in query_l):
@@ -581,7 +581,38 @@ def _discover_assets_for_query(query: str) -> list[str]:
             "https://raw.githubusercontent.com/datasets/gold-prices/master/data/monthly.csv",
             "https://github.com/datasets/gold-prices",
         ]
-    return [f"https://en.wikipedia.org/wiki/Special:Search?search={quote_plus(query)}"]
+    encoded = quote_plus(query)
+    # r.jina.ai provides a static, text-friendly rendering of dynamic search pages.
+    return [f"https://r.jina.ai/http://duckduckgo.com/?q={encoded}"]
+
+
+def _fetch_text_render_markdown(url: str, timeout_seconds: int = 12) -> tuple[str, str] | None:
+    """Fetch a URL through r.jina.ai text rendering for dynamic-page fallback extraction."""
+
+    normalized = _coerce_url_asset(url) or url
+    if "://" not in normalized:
+        normalized = f"https://{normalized}"
+    proxy_url = _apply_text_render_proxy(normalized, force=True)
+    request = Request(
+        proxy_url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/plain,text/markdown,*/*",
+        },
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            payload = response.read()
+        markdown = payload.decode("utf-8", errors="replace")
+        if markdown.strip():
+            return markdown, proxy_url
+    except (HTTPError, URLError, TimeoutError, ValueError) as error:
+        logger.debug("Text-render fallback fetch failed for %s: %s", proxy_url, error)
+    return None
 
 
 async def _search_urls_with_mcp(query: str, max_results: int = 6) -> list[str]:
@@ -608,6 +639,333 @@ async def _search_urls_with_mcp(query: str, max_results: int = 6) -> list[str]:
         return []
     finally:
         await router.shutdown()
+
+
+def _build_recovery_queries(base_url: str, instructions: str | None) -> list[str]:
+    """Build generic discovery queries for low-relevance extraction recovery."""
+
+    normalized_url = _coerce_url_asset(base_url) or base_url
+    if "://" not in normalized_url:
+        normalized_url = f"https://{normalized_url}"
+    parsed = urlparse(normalized_url)
+    host = (parsed.hostname or "").lower()
+
+    clean_instructions = (instructions or "").strip()
+    queries: list[str] = []
+    if host and clean_instructions:
+        queries.append(f"{host} {clean_instructions}")
+    if clean_instructions:
+        queries.append(clean_instructions)
+    if host:
+        queries.append(f"{host} latest trending top")
+
+    deduped: list[str] = []
+    for query in queries:
+        normalized = query.strip()
+        if not normalized or normalized in deduped:
+            continue
+        deduped.append(normalized)
+    return deduped
+
+
+def _extract_markdown_link_rows(
+    markdown: str,
+    source_url: str,
+    output_instructions: str | None,
+    instructions: str | None,
+    row_limit: int,
+) -> list[dict[str, Any]]:
+    """Extract rows from markdown content using link patterns and line analysis."""
+    
+    columns = _requested_columns_from_output_instructions(output_instructions) or ["title", "link", "content"]
+    keywords = _instruction_keywords(instructions, max_keywords=8)
+    
+    # Boilerplate patterns to filter out
+    boilerplate_labels = {
+        "home", "about", "contact", "contact us", "help", "search", "press",
+        "copyright", "creator", "creators", "advertise", "developers", "terms",
+        "privacy", "policy & safety", "sign in", "log in", "sign up", "register",
+        "settings", "report history", "send feedback", "learn more", "more info",
+        "test new features", "how youtube works", "nfl sunday ticket", "shorts",
+        "subscriptions", "you", "playlist", "now playing", "skip navigation",
+    }
+    boilerplate_url_tokens = (
+        "privacy", "terms", "cookie", "contact", "advertis", "copyright",
+        "policy", "press", "help", "about/", "/t/", "legal", "support",
+        "feedback", "settings", "account", "login", "signin", "signup",
+        "ServiceLogin", "accounts.google.com",
+    )
+    
+    candidate_rows: list[tuple[int, dict[str, Any]]] = []
+    seen_titles: set[str] = set()
+    seen_links: set[str] = set()
+    
+    # Patterns for extracting content
+    # Match markdown links like [Title](URL) but NOT image links like ![Image](URL)
+    content_link_pattern = re.compile(r'(?<!!)\[([^\]]+)\]\((https?://[^)]+)\)')
+    # Match view counts anywhere
+    views_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*views?', re.IGNORECASE)
+    likes_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*likes?', re.IGNORECASE)
+    comments_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*comments?', re.IGNORECASE)
+    date_pattern = re.compile(r'\b(today|yesterday|\d+\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\s+ago)\b', re.IGNORECASE)
+    
+    # Extract view counts from the entire document first, map them by line number
+    lines = markdown.split('\n')
+    line_views: dict[int, str] = {}
+    for i, line in enumerate(lines):
+        view_match = views_pattern.search(line)
+        if view_match:
+            line_views[i] = view_match.group(1)
+    
+    def get_nearby_metrics(line_idx: int, window: int = 5) -> dict[str, str]:
+        """Get metrics from nearby lines."""
+        metrics = {"views": "", "likes": "", "comments": "", "date": ""}
+        for offset in range(-window, window + 1):
+            check_idx = line_idx + offset
+            if 0 <= check_idx < len(lines):
+                check_line = lines[check_idx]
+                if not metrics["views"]:
+                    m = views_pattern.search(check_line)
+                    if m:
+                        metrics["views"] = m.group(1)
+                if not metrics["likes"]:
+                    m = likes_pattern.search(check_line)
+                    if m:
+                        metrics["likes"] = m.group(1)
+                if not metrics["comments"]:
+                    m = comments_pattern.search(check_line)
+                    if m:
+                        metrics["comments"] = m.group(1)
+                if not metrics["date"]:
+                    m = date_pattern.search(check_line)
+                    if m:
+                        metrics["date"] = m.group(1)
+        return metrics
+    
+    # Process each line
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line or len(line) < 15:
+            continue
+        
+        lowered_line = line.lower()
+        
+        # Skip pure navigation/boilerplate lines
+        if any(label == lowered_line for label in boilerplate_labels):
+            continue
+        
+        # Find content links (not images)
+        for match in content_link_pattern.finditer(line):
+            title = match.group(1).strip()
+            link = match.group(2).strip()
+            
+            # Skip image references in title
+            if title.startswith("Image ") or title.startswith("!["):
+                continue
+            
+            # Skip very short titles (likely navigation)
+            if len(title) < 5:
+                continue
+                
+            # Skip boilerplate titles
+            title_lower = title.lower()
+            if title_lower in boilerplate_labels:
+                continue
+            
+            # Skip titles that are just "#### Something" headers without real content
+            clean_title = re.sub(r'^#+\s*', '', title).strip()
+            if not clean_title or len(clean_title) < 5:
+                continue
+            
+            # Skip if already seen this title or link
+            title_normalized = clean_title.lower()[:50]
+            link_normalized = link.split('?')[0]  # Remove query params for dedup
+            if title_normalized in seen_titles:
+                continue
+            if link_normalized in seen_links and "watch" in link.lower():
+                continue
+            
+            # Skip boilerplate URLs
+            if any(token in link.lower() for token in boilerplate_url_tokens):
+                continue
+            
+            # Get metrics from nearby lines
+            metrics = get_nearby_metrics(i)
+            
+            # Calculate relevance score
+            score_text = f"{clean_title} {link}".lower()
+            keyword_score = sum(1 for kw in keywords if kw in score_text)
+            has_content_marker = any([
+                "video" in score_text,
+                "music" in score_text,
+                "official" in score_text,
+                metrics["views"],
+                metrics["likes"],
+                "watch" in link.lower(),
+            ])
+            
+            # Skip if no keyword match and no content markers
+            if keywords and keyword_score == 0 and not has_content_marker:
+                continue
+            
+            # Build row
+            row: dict[str, Any] = {}
+            for col in columns:
+                lower_col = col.lower()
+                if lower_col in {"url", "link", "href"}:
+                    row[col] = link
+                elif lower_col in {"title", "name", "text"}:
+                    row[col] = clean_title[:160]
+                elif lower_col in {"content", "summary", "description"}:
+                    row[col] = clean_title[:320]
+                elif lower_col in {"views", "view_count", "viewers"}:
+                    row[col] = metrics["views"]
+                elif lower_col in {"likes", "like_count"}:
+                    row[col] = metrics["likes"]
+                elif lower_col in {"comments", "comment_count"}:
+                    row[col] = metrics["comments"]
+                elif lower_col in {"date", "date_uploaded", "date_uplaoded", "published", "uploaded"}:
+                    row[col] = metrics["date"]
+                else:
+                    row[col] = ""
+            
+            # Track seen items
+            seen_titles.add(title_normalized)
+            seen_links.add(link_normalized)
+            
+            # Calculate final score for ranking
+            quality_score = keyword_score
+            if metrics["views"]:
+                quality_score += 3
+            if metrics["likes"] or metrics["comments"]:
+                quality_score += 1
+            if "official" in title_lower:
+                quality_score += 1
+            if "watch" in link.lower():
+                quality_score += 1
+            
+            candidate_rows.append((quality_score, row))
+    
+    # Also look for standalone lines with view counts (sometimes titles are separate from links)
+    for i, views in line_views.items():
+        if i > 0:
+            prev_line = lines[i - 1].strip()
+            # Check if previous line might be a title
+            if len(prev_line) > 20 and not prev_line.startswith("![") and not prev_line.startswith("http"):
+                title_normalized = prev_line.lower()[:50]
+                if title_normalized not in seen_titles:
+                    row = {}
+                    for col in columns:
+                        lower_col = col.lower()
+                        if lower_col in {"title", "name", "text"}:
+                            row[col] = prev_line[:160]
+                        elif lower_col in {"views", "view_count", "viewers"}:
+                            row[col] = views
+                        elif lower_col in {"url", "link", "href"}:
+                            row[col] = source_url
+                        else:
+                            row[col] = ""
+                    seen_titles.add(title_normalized)
+                    candidate_rows.append((2, row))  # Lower score for these
+    
+    # Sort by score and return top rows
+    candidate_rows.sort(key=lambda x: x[0], reverse=True)
+    return [row for _, row in candidate_rows[:row_limit]]
+
+
+def _extract_rows_from_text_render(
+    markdown: str,
+    source_url: str,
+    output_instructions: str | None,
+    instructions: str | None,
+    row_limit: int,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Execute fallback extraction code against text-rendered markdown."""
+    
+    columns = _requested_columns_from_output_instructions(output_instructions) or ["title", "link", "content"]
+
+    # First try dedicated markdown extraction (better for jina.ai output)
+    markdown_rows = _extract_markdown_link_rows(
+        markdown=markdown,
+        source_url=source_url,
+        output_instructions=output_instructions,
+        instructions=instructions,
+        row_limit=row_limit,
+    )
+    
+    if _rows_have_signal(markdown_rows):
+        markdown_rows, _ = _enforce_requested_schema(markdown_rows, output_instructions)
+        return markdown_rows[:row_limit], columns
+
+    # Fallback to HTML-based extraction (for cases where markdown contains HTML)
+    extraction_code = _fallback_extraction_code(output_instructions, instructions)
+    sandbox_globals = {
+        "soup": BeautifulSoup(markdown, "html.parser"),
+        "html": markdown,
+        "url": source_url,
+        "re": re,
+        "urljoin": urljoin,
+        "urlparse": urlparse,
+        "BeautifulSoup": BeautifulSoup,
+        "extracted_data": [],
+    }
+    try:
+        exec(extraction_code, sandbox_globals)
+        extracted_data = sandbox_globals.get("extracted_data", [])
+    except Exception as error:
+        logger.debug("Fallback text-render extraction failed for %s: %s", source_url, error)
+        extracted_data = []
+
+    if not isinstance(extracted_data, list):
+        extracted_data = [extracted_data] if extracted_data else []
+    extracted_data, output_columns = _enforce_requested_schema(extracted_data, output_instructions)
+    extracted_data = extracted_data[:row_limit]
+    return extracted_data, output_columns or columns
+
+
+async def _search_recovery_rows(
+    base_url: str,
+    instructions: str | None,
+    output_instructions: str | None,
+    row_limit: int,
+) -> tuple[list[dict[str, Any]], list[str], str | None, float]:
+    """Search-guided generic recovery for low-relevance extraction results."""
+
+    best_rows: list[dict[str, Any]] = []
+    best_columns: list[str] = []
+    best_source: str | None = None
+    best_score = 0.0
+
+    queries = _build_recovery_queries(base_url, instructions)
+    for query in queries[:3]:
+        discovered_urls = await _search_urls_with_mcp(query, max_results=8)
+        if not discovered_urls:
+            discovered_urls = _discover_assets_for_query(query)
+
+        for candidate_url in discovered_urls[:5]:
+            text_payload = _fetch_text_render_markdown(candidate_url, timeout_seconds=12)
+            if not text_payload:
+                continue
+            markdown, source_url = text_payload
+            rows, columns = _extract_rows_from_text_render(
+                markdown=markdown,
+                source_url=source_url,
+                output_instructions=output_instructions,
+                instructions=instructions,
+                row_limit=row_limit,
+            )
+            if not _rows_have_signal(rows):
+                continue
+            score = _rows_relevance_score(rows, instructions)
+            if score > best_score or (
+                abs(score - best_score) <= 0.0001 and len(rows) > len(best_rows)
+            ):
+                best_rows = rows
+                best_columns = columns
+                best_source = source_url
+                best_score = score
+
+    return best_rows, best_columns, best_source, best_score
 
 
 async def _discover_reddit_communities_via_search(limit: int = 25) -> list[dict[str, Any]]:
@@ -708,8 +1066,6 @@ async def _resolve_assets(
 
     resolved: list[str] = []
     discoveries: list[dict[str, Any]] = []
-    search_enabled = "mcp-search" in enabled_plugins
-
     for asset in assets:
         candidate = asset.strip()
         if not candidate:
@@ -721,9 +1077,7 @@ async def _resolve_assets(
                 resolved.append(normalized_url)
             continue
 
-        discovered: list[str] = []
-        if search_enabled:
-            discovered = await _search_urls_with_mcp(candidate)
+        discovered: list[str] = await _search_urls_with_mcp(candidate, max_results=8)
         if not discovered:
             discovered = _discover_assets_for_query(candidate)
 
@@ -1013,22 +1367,126 @@ def _agentic_live_llm_enabled() -> bool:
     return True
 
 
+def _apply_text_render_proxy(url: str, force: bool = False) -> str:
+    """Optionally route a URL through a text renderer for deterministic extraction."""
+
+    normalized = _coerce_url_asset(url) or url
+    if "://" not in normalized:
+        normalized = f"https://{normalized}"
+
+    if normalized.startswith("https://r.jina.ai/http://") or normalized.startswith("https://r.jina.ai/https://"):
+        return normalized
+    if force:
+        return f"https://r.jina.ai/http://{normalized.split('://', 1)[1]}"
+    return normalized
+
+
+def _infer_navigation_paths(instructions: str | None) -> list[str]:
+    """Infer common navigation paths based on user intent - works generically across sites."""
+    
+    if not instructions:
+        return []
+    
+    instruction_text = instructions.lower()
+    paths: list[str] = []
+    
+    # Trending/popular intent - common paths across many sites
+    if any(token in instruction_text for token in ("trending", "popular", "top", "hot", "best")):
+        paths.extend([
+            "/feed/trending",
+            "/trending",
+            "/popular",
+            "/explore",
+            "/top",
+            "/hot",
+            "/discover",
+        ])
+    
+    # Latest/new/recent intent
+    if any(token in instruction_text for token in ("latest", "new", "recent", "today")):
+        paths.extend([
+            "/new",
+            "/latest",
+            "/recent",
+            "/feed/new",
+        ])
+    
+    # Category-specific paths based on content type mentioned
+    if "music" in instruction_text or "song" in instruction_text:
+        paths.extend(["/feed/trending?bp=4gINGgt5dG1hX2NoYXJ0cw%3D%3D", "/music", "/charts"])
+    if "video" in instruction_text:
+        paths.extend(["/feed/trending", "/videos"])
+    if "game" in instruction_text or "gaming" in instruction_text:
+        paths.extend(["/gaming", "/feed/trending?bp=4gIcGhpnYW1pbmdfY29ycHVzX21vc3RfcG9wdWxhcg%3D%3D"])
+    if "news" in instruction_text:
+        paths.extend(["/news", "/feed/news"])
+    if "movie" in instruction_text or "film" in instruction_text:
+        paths.extend(["/feed/trending?bp=4gIKGgh0cmFpbGVycw%3D%3D", "/movies"])
+    
+    # Dedupe while preserving order
+    seen: set[str] = set()
+    unique_paths: list[str] = []
+    for path in paths:
+        if path not in seen:
+            seen.add(path)
+            unique_paths.append(path)
+    
+    return unique_paths
+
+
+def _build_search_navigation_url(base_url: str, instructions: str | None) -> str | None:
+    """Build a search URL when direct navigation paths don't exist - generic across sites."""
+    
+    if not instructions:
+        return None
+    
+    parsed = urlparse(base_url)
+    host = (parsed.hostname or "").lower()
+    
+    # Extract search terms from instructions
+    keywords = _instruction_keywords(instructions, max_keywords=6)
+    if not keywords:
+        return None
+    
+    query_text = "+".join(keywords)
+    
+    # Common search URL patterns across sites (generic, not site-specific)
+    search_patterns = [
+        f"{parsed.scheme}://{parsed.netloc}/search?q={query_text}",
+        f"{parsed.scheme}://{parsed.netloc}/results?search_query={query_text}",
+        f"{parsed.scheme}://{parsed.netloc}/search?query={query_text}",
+        f"{parsed.scheme}://{parsed.netloc}/?s={query_text}",
+    ]
+    
+    return search_patterns[0] if search_patterns else None
+
+
 def _fallback_navigation_url(
     base_url: str,
     instructions: str,
     navigation_plan: dict[str, Any],
 ) -> str:
-    """Derive a deterministic navigation URL using plan/template hints when LLM is unavailable."""
+    """Derive a deterministic navigation URL using plan/template hints when LLM is unavailable.
+    
+    Uses intelligent path inference that works generically across sites:
+    1. Template target URLs (if available)
+    2. For top/trending/popular requests: PREFER SEARCH URLs (work without auth)
+    3. Direct path navigation as fallback
+    """
 
     normalized = _coerce_url_asset(base_url) or base_url
     if "://" not in normalized:
         normalized = f"https://{normalized}"
-
+    
+    parsed = urlparse(normalized)
     instruction_text = (instructions or "").lower()
+    
+    # 1. Check template target URLs first (hints only)
     plan_targets = navigation_plan.get("target_urls") or []
     valid_targets = [target for target in plan_targets if isinstance(target, str) and _is_url_asset(target)]
     if valid_targets:
-        if any(token in instruction_text for token in ("trending", "popular", "top", "latest")):
+        ranked_intent = any(token in instruction_text for token in ("trending", "popular", "top", "latest"))
+        if ranked_intent:
             keyword_target = next(
                 (
                     target
@@ -1038,10 +1496,40 @@ def _fallback_navigation_url(
                 None,
             )
             if keyword_target:
-                return keyword_target
-        return valid_targets[0]
+                return _apply_text_render_proxy(keyword_target)
 
-    return normalized
+        search_intent = any(token in instruction_text for token in ("search", "query", "lookup"))
+        if search_intent:
+            search_target = next(
+                (target for target in valid_targets if any(token in target.lower() for token in ("search", "query"))),
+                None,
+            )
+            if search_target:
+                return _apply_text_render_proxy(search_target)
+
+    # 2. For "top/trending/popular" queries, PREFER SEARCH URLs
+    # Search results typically work without authentication and show actual content
+    ranked_intent = any(token in instruction_text for token in ("trending", "popular", "top", "best", "music", "video"))
+    if ranked_intent:
+        search_url = _build_search_navigation_url(normalized, instructions)
+        if search_url:
+            return _apply_text_render_proxy(search_url)
+    
+    # 3. Try direct navigation paths as fallback
+    inferred_paths = _infer_navigation_paths(instructions)
+    if inferred_paths:
+        best_path = inferred_paths[0]
+        inferred_url = f"{parsed.scheme}://{parsed.netloc}{best_path}"
+        return _apply_text_render_proxy(inferred_url)
+    
+    # 4. For explicit search intents, build a search URL
+    search_intent = any(token in instruction_text for token in ("search", "find", "looking for"))
+    if search_intent:
+        search_url = _build_search_navigation_url(normalized, instructions)
+        if search_url:
+            return _apply_text_render_proxy(search_url)
+
+    return _apply_text_render_proxy(normalized)
 
 
 def _requested_columns_from_output_instructions(output_instructions: str | None) -> list[str]:
@@ -1086,7 +1574,125 @@ def _enforce_requested_schema(
     return normalized_rows, requested_columns
 
 
-def _fallback_extraction_code(output_instructions: str | None) -> str:
+def _requested_row_limit(instructions: str | None, default_limit: int = 25) -> int:
+    """Extract a requested row limit (e.g., 'top 5') from instructions."""
+
+    if not instructions:
+        return default_limit
+    text = instructions.lower()
+    match = re.search(r"\btop\s+(\d{1,3})\b", text) or re.search(
+        r"\b(\d{1,3})\s+(?:rows|items|results|entries|records|repos|frameworks)\b",
+        text,
+    )
+    if not match:
+        return default_limit
+    value = int(match.group(1))
+    if value < 1:
+        return default_limit
+    return min(value, 100)
+
+
+def _instruction_keywords(instructions: str | None, max_keywords: int = 8) -> list[str]:
+    """Extract semantic keywords from user instructions for relevance checks."""
+
+    if not instructions:
+        return []
+    tokens = re.findall(r"[a-zA-Z]{3,}", instructions.lower())
+    stop_words = {
+        "get",
+        "give",
+        "show",
+        "find",
+        "extract",
+        "with",
+        "from",
+        "this",
+        "that",
+        "what",
+        "where",
+        "when",
+        "which",
+        "return",
+        "output",
+        "format",
+        "data",
+        "list",
+        "site",
+        "website",
+        "page",
+        "entries",
+        "results",
+        "items",
+        "records",
+        "details",
+        "about",
+        "across",
+        "into",
+        "only",
+        "please",
+        "the",
+        "and",
+    }
+    keywords: list[str] = []
+    for token in tokens:
+        if token in stop_words:
+            continue
+        if token not in keywords:
+            keywords.append(token)
+        if len(keywords) >= max_keywords:
+            break
+    return keywords
+
+
+def _rows_have_signal(rows: list[dict[str, Any]]) -> bool:
+    """Return True when extracted rows contain at least one non-empty value."""
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for value in row.values():
+            if value is None:
+                continue
+            if isinstance(value, str):
+                if value.strip():
+                    return True
+            elif value:
+                return True
+    return False
+
+
+def _rows_relevance_score(rows: list[dict[str, Any]], instructions: str | None) -> float:
+    """Score row relevance against instruction keywords (0-1)."""
+
+    if not rows:
+        return 0.0
+    keywords = _instruction_keywords(instructions, max_keywords=8)
+    if not keywords:
+        return 1.0
+
+    row_scores: list[float] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        joined = " ".join(
+            str(value).lower()
+            for value in row.values()
+            if value is not None and str(value).strip()
+        )
+        if not joined:
+            continue
+        hits = sum(1 for keyword in keywords if keyword in joined)
+        row_scores.append(hits / len(keywords))
+
+    if not row_scores:
+        return 0.0
+
+    row_scores.sort(reverse=True)
+    top_n = max(1, min(3, len(row_scores)))
+    return sum(row_scores[:top_n]) / top_n
+
+
+def _fallback_extraction_code(output_instructions: str | None, instructions: str | None = None) -> str:
     """Build deterministic extraction code when live LLM code generation is unavailable."""
 
     columns = _requested_columns_from_output_instructions(output_instructions) or [
@@ -1094,51 +1700,208 @@ def _fallback_extraction_code(output_instructions: str | None) -> str:
         "url",
         "content",
     ]
+    keywords = _instruction_keywords(instructions, max_keywords=8)
+    category_hint = keywords[0].title() if keywords else ""
     columns_literal = repr(columns)
+    keywords_literal = repr(keywords)
+    category_hint_literal = repr(category_hint)
     return f"""
 columns = {columns_literal}
+keywords = {keywords_literal}
+category_hint = {category_hint_literal}
 rows = []
+candidate_rows = []
 seen = set()
 anchors = soup.select("a[href]")
+noise_fragments = [
+    "javascript is disabled",
+    "please enable javascript",
+    "skip to main content",
+    "press enter to activate",
+    "toggle navigation",
+    "close menu",
+    "open menu",
+    "cookie settings",
+]
+boilerplate_labels = {{
+    "home",
+    "about",
+    "contact",
+    "contact us",
+    "help",
+    "search",
+    "press",
+    "copyright",
+    "creator",
+    "creators",
+    "advertise",
+    "developers",
+    "terms",
+    "privacy",
+    "policy & safety",
+    "how youtube works",
+    "test new features",
+    "nfl sunday ticket",
+    "sign in",
+    "log in",
+    "sign up",
+    "register",
+    "settings",
+    "report history",
+    "send feedback",
+    "learn more",
+    "more info",
+}}
+boilerplate_url_tokens = (
+    "privacy",
+    "terms",
+    "cookie",
+    "contact",
+    "advertis",
+    "copyright",
+    "policy",
+    "press",
+    "help",
+    "about/",
+    "/t/",
+    "legal",
+    "support",
+    "feedback",
+    "settings",
+    "account",
+    "login",
+    "signin",
+    "signup",
+    "creators/",
+    "howyoutubeworks",
+)
+ranked_intent = bool(re.search(r"\\b(top|trending|popular|latest|today|best)\\b", " ".join(keywords), re.IGNORECASE))
+
+def _extract_metric(text, patterns):
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return ""
+
+def _compact(value, limit):
+    return re.sub(r"\\s+", " ", value).strip()[:limit]
+
+def _metric_numeric(raw):
+    normalized = str(raw or "").strip().lower().replace(",", "")
+    if not normalized:
+        return 0.0
+    multiplier = 1.0
+    if normalized.endswith("k"):
+        multiplier = 1000.0
+        normalized = normalized[:-1]
+    elif normalized.endswith("m"):
+        multiplier = 1000000.0
+        normalized = normalized[:-1]
+    try:
+        return float(normalized) * multiplier
+    except ValueError:
+        return 0.0
 
 for anchor in anchors:
     href = (anchor.get("href") or "").strip()
     text = anchor.get_text(" ", strip=True)
     if not href and not text:
         continue
-    if href.startswith("/"):
-        full_href = f"{{url.rstrip('/')}}{{href}}"
-    else:
-        full_href = href
+    if href.startswith("#") or href.startswith("mailto:") or href.startswith("javascript:"):
+        continue
+    full_href = urljoin(url, href)
+    if not full_href.startswith("http"):
+        continue
+    if full_href.count("/") <= 2:
+        continue
 
-    repo_owner = ""
-    repo_name = ""
-    path = full_href.split("://", 1)[-1]
-    path_parts = [part for part in path.split("/") if part]
-    if len(path_parts) >= 3:
-        repo_owner = path_parts[1]
-        repo_name = path_parts[2]
-
+    parsed_href = urlparse(full_href)
+    path_parts = [part for part in parsed_href.path.split("/") if part]
+    slug_value = path_parts[-1].replace("-", " ").replace("_", " ").strip() if path_parts else ""
     container = anchor.find_parent(["article", "tr", "li", "div"])
     container_text = container.get_text(" ", strip=True) if container else text
-    star_match = re.search(r"([0-9][0-9,\\.kKmM]*)\\s*(?:stars?|star)", container_text, re.IGNORECASE)
-    fork_match = re.search(r"([0-9][0-9,\\.kKmM]*)\\s*(?:forks?|fork)", container_text, re.IGNORECASE)
+    stars_value = _extract_metric(container_text, [r"([0-9][0-9,\\.kKmM]*)\\s*(?:stars?|star)\\b"])
+    forks_value = _extract_metric(container_text, [r"([0-9][0-9,\\.kKmM]*)\\s*(?:forks?|fork)\\b"])
+    views_value = _extract_metric(
+        container_text,
+        [r"([0-9][0-9,\\.kKmM]*)\\s*(?:views?|viewers?|watching|plays?)\\b"],
+    )
+    likes_value = _extract_metric(container_text, [r"([0-9][0-9,\\.kKmM]*)\\s*(?:likes?|thumbs\\s*up)\\b"])
+    comments_value = _extract_metric(container_text, [r"([0-9][0-9,\\.kKmM]*)\\s*(?:comments?|replies)\\b"])
+    date_value = _extract_metric(
+        container_text,
+        [
+            r"\\b(today|yesterday|\\d+\\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\\s+ago)\\b",
+            r"\\b(\\d{{4}}[-/]\\d{{1,2}}[-/]\\d{{1,2}})\\b",
+            r"\\b(\\d{{1,2}}\\s+[A-Za-z]{{3,9}}\\s+\\d{{4}})\\b",
+        ],
+    )
+    category_from_url = ""
+    if len(path_parts) >= 3 and path_parts[0].lower() in {"category", "tags", "topic", "topics", "genres", "genre"}:
+        category_from_url = path_parts[1].replace("-", " ").replace("_", " ").strip().title()
+
+    label = (text or container_text).strip()
+    if not label:
+        continue
+    lowered_label = label.lower()
+    lowered_href = full_href.lower()
+    if any(fragment in lowered_label for fragment in noise_fragments):
+        continue
+    if lowered_label in boilerplate_labels:
+        continue
+    if any(token in lowered_href for token in boilerplate_url_tokens):
+        continue
+    if len(label) > 180 or len(label.split()) > 22:
+        continue
+    if label.lower() in {{
+        "main page", "home", "about", "contact", "help", "search", "read", "talk",
+        "view source", "view history", "contents", "current events", "special pages",
+    }}:
+        continue
+
+    score_text = " ".join([label, container_text, full_href]).lower()
+    keyword_score = sum(1 for keyword in keywords if keyword in score_text)
+    has_engagement_metric = any([views_value, likes_value, comments_value, date_value])
+    if keywords and keyword_score == 0 and not has_engagement_metric:
+        continue
+    content_text = (container_text or label).strip()
+    lowered_content_text = content_text.lower()
+    if (
+        len(content_text) > 220
+        or " menu " in lowered_content_text
+        or "dropdown" in lowered_content_text
+        or "press enter to" in lowered_content_text
+    ):
+        content_text = label
 
     row = {{}}
     for column in columns:
         lower = column.lower()
         if lower in {{"url", "link", "href"}}:
             row[column] = full_href
-        elif lower in {{"title", "name", "text", "content"}}:
-            row[column] = text or container_text
-        elif lower in {{"username", "user", "owner"}}:
-            row[column] = repo_owner
+        elif lower in {{"title", "name", "text"}}:
+            row[column] = _compact(label, 160)
+        elif lower in {{"content", "summary", "description"}}:
+            row[column] = _compact(content_text, 320)
+        elif lower in {{"streamer", "channel", "creator", "username", "user", "owner"}}:
+            row[column] = _compact(slug_value or label, 120)
         elif lower in {{"repo", "repository", "repo_name"}}:
-            row[column] = repo_name
+            row[column] = path_parts[1] if len(path_parts) >= 2 else _compact(slug_value, 120)
         elif lower in {{"stars", "star", "star_count"}}:
-            row[column] = star_match.group(1) if star_match else ""
+            row[column] = stars_value
         elif lower in {{"forks", "fork", "fork_count"}}:
-            row[column] = fork_match.group(1) if fork_match else ""
+            row[column] = forks_value
+        elif lower in {{"views", "view_count", "viewers", "viewer_count", "watchers", "watching"}}:
+            row[column] = views_value
+        elif lower in {{"likes", "like_count"}}:
+            row[column] = likes_value
+        elif lower in {{"comments", "comment_count"}}:
+            row[column] = comments_value
+        elif lower in {{"date", "date_uploaded", "date_uplaoded", "published", "uploaded", "upload_date"}}:
+            row[column] = date_value
+        elif lower in {{"category", "game", "topic"}}:
+            row[column] = category_from_url or category_hint
         else:
             row[column] = ""
 
@@ -1148,7 +1911,126 @@ for anchor in anchors:
     seen.add(row_key)
 
     if any(value for value in row.values()):
-        rows.append(row)
+        quality_score = keyword_score
+        if views_value:
+            quality_score += 2
+        if likes_value or comments_value:
+            quality_score += 1
+        candidate_rows.append((quality_score, row))
+
+if not candidate_rows:
+    raw_lines = [line.strip() for line in soup.get_text("\\n").splitlines() if line and line.strip()]
+    for line in raw_lines:
+        if len(line) < 15:
+            continue
+        lowered_line = line.lower()
+        if any(fragment in lowered_line for fragment in noise_fragments):
+            continue
+        if len(line) > 260:
+            continue
+        if lowered_line.startswith(("title:", "url source:", "markdown content:")):
+            continue
+        if re.match(r"^\\*\\s+\\[(all|images|videos|news|maps|shopping)\\]", lowered_line):
+            continue
+        if re.match(r"^\\[[^\\]]+\\]\\(https?://duckduckgo\\.com/", lowered_line):
+            continue
+        if lowered_line in {"privacy", "terms", "advertising", "about duckduckgo"}:
+            continue
+        if lowered_line.startswith("![image"):
+            continue
+        if lowered_line in boilerplate_labels:
+            continue
+        keyword_score = sum(1 for keyword in keywords if keyword in lowered_line)
+        views_value = _extract_metric(line, [r"([0-9][0-9,\\.kKmM]*)\\s*(?:views?|viewers?|watching|plays?)\\b"])
+        likes_value = _extract_metric(line, [r"([0-9][0-9,\\.kKmM]*)\\s*(?:likes?|thumbs\\s*up)\\b"])
+        comments_value = _extract_metric(line, [r"([0-9][0-9,\\.kKmM]*)\\s*(?:comments?|replies)\\b"])
+        date_value = _extract_metric(
+            line,
+            [
+                r"\\b(today|yesterday|\\d+\\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\\s+ago)\\b",
+                r"\\b(\\d{{4}}[-/]\\d{{1,2}}[-/]\\d{{1,2}})\\b",
+                r"\\b(\\d{{1,2}}\\s+[A-Za-z]{{3,9}}\\s+\\d{{4}})\\b",
+            ],
+        )
+        markdown_link_match = re.search(r"\\[([^\\]]+)\\]\\((https?://[^\\)]+)\\)", line)
+        plain_link_match = re.search(r"https?://[^\\s\\)]+", line)
+        if markdown_link_match:
+            line_title = markdown_link_match.group(1).strip()
+            line_link = markdown_link_match.group(2).strip()
+        else:
+            line_title = line.strip()
+            line_link = plain_link_match.group(0).strip() if plain_link_match else url
+
+        if ranked_intent and keywords and keyword_score == 0 and not any([views_value, likes_value, comments_value]):
+            continue
+
+        row = {{}}
+        for column in columns:
+            lower = column.lower()
+            if lower in {{"url", "link", "href"}}:
+                row[column] = line_link
+            elif lower in {{"title", "name", "text"}}:
+                row[column] = _compact(line_title, 160)
+            elif lower in {{"content", "summary", "description"}}:
+                row[column] = _compact(line, 320)
+            elif lower in {{"streamer", "channel", "creator", "username", "user", "owner"}}:
+                row[column] = _compact(line_title, 120)
+            elif lower in {{"views", "view_count", "viewers", "viewer_count", "watchers", "watching"}}:
+                row[column] = views_value
+            elif lower in {{"likes", "like_count"}}:
+                row[column] = likes_value
+            elif lower in {{"comments", "comment_count"}}:
+                row[column] = comments_value
+            elif lower in {{"date", "date_uploaded", "date_uplaoded", "published", "uploaded", "upload_date"}}:
+                row[column] = date_value
+            elif lower in {{"category", "game", "topic"}}:
+                row[column] = category_hint
+            else:
+                row[column] = ""
+        row_key = tuple(row.get(column, "") for column in columns)
+        if row_key in seen:
+            continue
+        seen.add(row_key)
+        quality_score = max(keyword_score, 1)
+        if views_value:
+            quality_score += 2
+        if likes_value or comments_value:
+            quality_score += 1
+        candidate_rows.append((quality_score, row))
+        if len(candidate_rows) >= 40:
+            break
+
+ranking_column = next(
+    (
+        column
+        for column in columns
+        if column.lower() in {{
+            "views",
+            "view_count",
+            "viewers",
+            "viewer_count",
+            "watchers",
+            "watching",
+            "likes",
+            "like_count",
+            "comments",
+            "comment_count",
+            "stars",
+            "star_count",
+            "forks",
+            "fork_count",
+        }}
+    ),
+    None,
+)
+
+if ranking_column:
+    candidate_rows.sort(key=lambda pair: (_metric_numeric(pair[1].get(ranking_column, "")), pair[0]), reverse=True)
+elif keywords:
+    candidate_rows.sort(key=lambda pair: pair[0], reverse=True)
+
+for _, row in candidate_rows:
+    rows.append(row)
     if len(rows) >= 25:
         break
 
@@ -1239,6 +2121,7 @@ URL:"""
                 navigation_mode = "llm"
         except Exception as e:
             logger.warning("LLM navigation decision failed, using heuristic fallback: %s", e)
+    target_url = _apply_text_render_proxy(target_url)
     
     # Tool call: LLM navigation planning
     yield _record_step(
@@ -1550,7 +2433,10 @@ extracted_data = [
 
 Return ONLY executable Python code, no explanations or markdown:"""
 
-    extraction_code = _fallback_extraction_code(request.output_instructions)
+    extraction_code = _fallback_extraction_code(
+        request.output_instructions,
+        request.instructions,
+    )
     codegen_mode = "heuristic"
     if live_llm_enabled:
         try:
@@ -1623,11 +2509,13 @@ Return ONLY executable Python code, no explanations or markdown:"""
         "html": nav_obs.page_html,
         "url": target_url,
         "re": re,
+        "urljoin": urljoin,
         "urlparse": urlparse,
         "BeautifulSoup": BeautifulSoup,
         "extracted_data": [],  # LLM code should populate this
     }
     output_columns: list[str] = []
+    execution_mode = codegen_mode
     
     try:
         # Execute the LLM-generated code
@@ -1640,8 +2528,124 @@ Return ONLY executable Python code, no explanations or markdown:"""
             extracted_data,
             request.output_instructions,
         )
+        requested_limit = _requested_row_limit(request.instructions, default_limit=25)
+        extracted_data = extracted_data[:requested_limit]
+        relevance_score = _rows_relevance_score(extracted_data, request.instructions)
+
+        if not _rows_have_signal(extracted_data):
+            if codegen_mode == "llm":
+                try:
+                    heuristic_code = _fallback_extraction_code(
+                        request.output_instructions,
+                        request.instructions,
+                    )
+                    heuristic_globals = {
+                        **sandbox_globals,
+                        "extracted_data": [],
+                    }
+                    exec(heuristic_code, heuristic_globals)
+                    heuristic_data = heuristic_globals.get("extracted_data", [])
+                    if not isinstance(heuristic_data, list):
+                        heuristic_data = [heuristic_data] if heuristic_data else []
+                    heuristic_data, heuristic_columns = _enforce_requested_schema(
+                        heuristic_data,
+                        request.output_instructions,
+                    )
+                    heuristic_data = heuristic_data[:requested_limit]
+                    if _rows_have_signal(heuristic_data):
+                        extracted_data = heuristic_data
+                        output_columns = heuristic_columns or output_columns
+                        execution_mode = "llm_with_heuristic_recovery"
+                except Exception as recovery_error:
+                    logger.warning("Heuristic recovery after empty LLM extraction failed: %s", recovery_error)
+
+            if not _rows_have_signal(extracted_data):
+                text_render_payload = _fetch_text_render_markdown(target_url, timeout_seconds=12)
+                if text_render_payload:
+                    text_markdown, text_render_url = text_render_payload
+                    try:
+                        text_data, text_columns = _extract_rows_from_text_render(
+                            markdown=text_markdown,
+                            source_url=text_render_url,
+                            output_instructions=request.output_instructions,
+                            instructions=request.instructions,
+                            row_limit=requested_limit,
+                        )
+                        if _rows_have_signal(text_data):
+                            extracted_data = text_data
+                            output_columns = text_columns or output_columns
+                            execution_mode = "text_render_recovery"
+                            target_url = text_render_url
+                    except Exception as text_recovery_error:
+                        logger.warning("Text-render recovery after empty extraction failed: %s", text_recovery_error)
+
+        relevance_score = _rows_relevance_score(extracted_data, request.instructions)
+        recovery_keywords = _instruction_keywords(request.instructions, max_keywords=8)
+        if _rows_have_signal(extracted_data) and recovery_keywords and relevance_score < 0.22:
+            step_num += 1
+            yield _record_step(
+                session,
+                ScrapeStep(
+                    step_number=step_num,
+                    action="tool_call",
+                    url=target_url,
+                    status="running",
+                    message="agent.recover_relevance(query)",
+                    extracted_data={
+                        "tool_name": "agent.recover_relevance",
+                        "tool_description": "Search-guided relevance recovery for low-signal extraction output",
+                        "parameters": {
+                            "keywords": recovery_keywords,
+                            "baseline_relevance": round(relevance_score, 3),
+                        },
+                    },
+                    timestamp=_now_iso(),
+                ),
+            )
+
+            recovered_rows, recovered_columns, recovered_source, recovered_score = await _search_recovery_rows(
+                base_url=url,
+                instructions=request.instructions,
+                output_instructions=request.output_instructions,
+                row_limit=requested_limit,
+            )
+            improved = _rows_have_signal(recovered_rows) and recovered_score > (relevance_score + 0.05)
+            if improved:
+                extracted_data = recovered_rows
+                output_columns = recovered_columns or output_columns
+                target_url = recovered_source or target_url
+                execution_mode = "search_recovery"
+                relevance_score = recovered_score
+
+            yield _record_step(
+                session,
+                ScrapeStep(
+                    step_number=step_num,
+                    action="tool_call",
+                    url=target_url,
+                    status="complete",
+                    message=(
+                        f"agent.recover_relevance() → {'improved' if improved else 'no_change'} "
+                        f"({relevance_score:.2f})"
+                    ),
+                    extracted_data={
+                        "tool_name": "agent.recover_relevance",
+                        "result": {
+                            "improved": improved,
+                            "relevance": round(relevance_score, 3),
+                            "recovered_rows": len(recovered_rows),
+                            "source": recovered_source,
+                        },
+                    },
+                    reward=0.1 if improved else 0.0,
+                    timestamp=_now_iso(),
+                ),
+            )
+            if improved:
+                total_reward += 0.1
         
-        exec_reward = 0.5 if extracted_data else 0.1
+        has_signal = _rows_have_signal(extracted_data)
+        exec_reward = 0.5 if has_signal else 0.1
         total_reward += exec_reward
         
         yield _record_step(
@@ -1657,6 +2661,9 @@ Return ONLY executable Python code, no explanations or markdown:"""
                     "tool_description": "Execute extraction code in sandbox",
                     "result": {
                         "items_extracted": len(extracted_data),
+                        "has_signal": has_signal,
+                        "relevance_score": round(relevance_score, 3),
+                        "mode": execution_mode,
                         "columns": output_columns,
                         "sample": extracted_data[:2] if extracted_data else [],
                     },
@@ -1679,6 +2686,8 @@ Return ONLY executable Python code, no explanations or markdown:"""
             extracted_data,
             request.output_instructions,
         )
+        requested_limit = _requested_row_limit(request.instructions, default_limit=25)
+        extracted_data = extracted_data[:requested_limit]
         total_reward += 0.05
         
         yield _record_step(
@@ -1731,24 +2740,54 @@ Return ONLY executable Python code, no explanations or markdown:"""
     
     # Store extracted data in session
     if request.output_format == OutputFormat.CSV and extracted_data:
-        # Generate CSV output
+        existing_rows: list[dict[str, Any]] = []
+        existing_sources: list[str] = []
+        existing_payload = session.get("extracted_data")
+        if isinstance(existing_payload, dict):
+            if isinstance(existing_payload.get("rows"), list):
+                existing_rows = [row for row in existing_payload["rows"] if isinstance(row, dict)]
+            if isinstance(existing_payload.get("sources"), list):
+                existing_sources = [str(value) for value in existing_payload["sources"]]
+
+        merged_rows = [*existing_rows, *extracted_data]
+        fieldnames = output_columns or list(extracted_data[0].keys())
+
+        deduped_rows: list[dict[str, Any]] = []
+        seen_keys: set[tuple[str, ...]] = set()
+        for row in merged_rows:
+            normalized_row = {field: str(row.get(field, "")) for field in fieldnames}
+            row_key = tuple(normalized_row[field] for field in fieldnames)
+            if row_key in seen_keys:
+                continue
+            seen_keys.add(row_key)
+            deduped_rows.append(normalized_row)
+
+        requested_limit = _requested_row_limit(request.instructions, default_limit=25)
+        deduped_rows = deduped_rows[:requested_limit]
+
         output_buffer = io.StringIO()
-        if extracted_data:
-            fieldnames = output_columns or list(extracted_data[0].keys())
-            writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(extracted_data)
+        writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(deduped_rows)
+
+        merged_sources = [*existing_sources]
+        if target_url not in merged_sources:
+            merged_sources.append(target_url)
         
         session["extracted_data"] = {
             "csv_output": output_buffer.getvalue(),
-            "rows": extracted_data,
-            "columns": fieldnames if extracted_data else [],
-            "row_count": len(extracted_data),
+            "rows": deduped_rows,
+            "columns": fieldnames,
+            "row_count": len(deduped_rows),
+            "sources": merged_sources,
         }
     else:
-        session["extracted_data"] = {
-            target_url: extracted_data
-        }
+        current_payload = session.get("extracted_data")
+        merged_payload: dict[str, Any] = {}
+        if isinstance(current_payload, dict) and "csv_output" not in current_payload:
+            merged_payload.update(current_payload)
+        merged_payload[target_url] = extracted_data
+        session["extracted_data"] = merged_payload
     
     total_reward += 0.1
     
