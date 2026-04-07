@@ -138,7 +138,9 @@ const StepAccordionItem: React.FC<StepAccordionItemProps> = ({ step, isExpanded,
           <div className="text-left min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-white">
-                {isToolCall ? toolName : step.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                {isToolCall 
+                  ? (toolName ? `🔧 ${toolName}` : 'Tool Call')
+                  : step.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
               </span>
               <Badge 
                 variant={step.status === 'completed' ? 'success' : step.status === 'failed' ? 'error' : 'info'} 
