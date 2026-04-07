@@ -10,7 +10,6 @@ import {
   AlertCircle,
   Loader2,
   Plug,
-  Cpu,
   Wrench,
   Database,
   Sparkles,
@@ -49,8 +48,6 @@ const getCategoryIcon = (category: string) => {
       return <Plug className="w-5 h-5 text-cyan-400" />;
     case 'mcps':
       return <Wrench className="w-5 h-5 text-amber-400" />;
-    case 'skills':
-      return <Cpu className="w-5 h-5 text-purple-400" />;
     case 'processors':
       return <Database className="w-5 h-5 text-pink-400" />;
     default:
@@ -62,7 +59,6 @@ const getCategoryLabel = (category: string) => {
   const labels: Record<string, string> = {
     apis: 'API Providers',
     mcps: 'MCP Tools',
-    skills: 'Skills & Agents',
     processors: 'Data Processors',
   };
   return labels[category] || category;
@@ -72,7 +68,6 @@ const getCategoryColor = (category: string) => {
   const colors: Record<string, string> = {
     apis: 'from-cyan-500/20 to-blue-500/10 border-cyan-500/30',
     mcps: 'from-amber-500/20 to-orange-500/10 border-amber-500/30',
-    skills: 'from-purple-500/20 to-pink-500/10 border-purple-500/30',
     processors: 'from-pink-500/20 to-rose-500/10 border-pink-500/30',
   };
   return colors[category] || 'from-gray-500/20 to-gray-500/10 border-gray-500/30';
@@ -169,7 +164,7 @@ export const PluginsPage: React.FC<PluginsPageProps> = ({ className }) => {
             Plugins
           </h1>
           <p className="text-gray-400 mt-1">
-            Extend ScrapeRL with APIs, tools, skills, and processors
+            Extend ScrapeRL with APIs, MCP tools, and processors
           </p>
         </div>
         
@@ -228,7 +223,7 @@ export const PluginsPage: React.FC<PluginsPageProps> = ({ className }) => {
             >
               All
             </button>
-            {['apis', 'mcps', 'skills', 'processors'].map((cat) => (
+            {(pluginsData?.categories || ['apis', 'mcps', 'processors']).map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}

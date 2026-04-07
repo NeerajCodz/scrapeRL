@@ -62,6 +62,16 @@ PLUGIN_REGISTRY = {
             "requires_key": True,
         },
         {
+            "id": "nvidia-api",
+            "name": "NVIDIA API",
+            "category": "apis",
+            "description": "DeepSeek, Nemotron, and Llama models via NVIDIA",
+            "version": "1.0.0",
+            "size": "44KB",
+            "installed": True,  # Pre-installed
+            "requires_key": True,
+        },
+        {
             "id": "ollama-api",
             "name": "Ollama (Local)",
             "category": "apis",
@@ -141,79 +151,6 @@ PLUGIN_REGISTRY = {
             "description": "Connect to SQL/NoSQL databases",
             "version": "1.0.0",
             "size": "100KB",
-            "installed": False,
-            "requires_key": False,
-        },
-    ],
-    # Skills/Agents
-    "skills": [
-        {
-            "id": "skill-planner",
-            "name": "Planner Agent",
-            "category": "skills",
-            "description": "Strategic task planning",
-            "version": "1.0.0",
-            "size": "75KB",
-            "installed": True,
-            "requires_key": False,
-        },
-        {
-            "id": "skill-navigator",
-            "name": "Navigator Agent",
-            "category": "skills",
-            "description": "Web navigation and interaction",
-            "version": "1.0.0",
-            "size": "85KB",
-            "installed": True,
-            "requires_key": False,
-        },
-        {
-            "id": "skill-extractor",
-            "name": "Extractor Agent",
-            "category": "skills",
-            "description": "Data extraction and parsing",
-            "version": "1.0.0",
-            "size": "95KB",
-            "installed": True,
-            "requires_key": False,
-        },
-        {
-            "id": "skill-verifier",
-            "name": "Verifier Agent",
-            "category": "skills",
-            "description": "Data validation and verification",
-            "version": "1.0.0",
-            "size": "70KB",
-            "installed": True,
-            "requires_key": False,
-        },
-        {
-            "id": "web_scraper",
-            "name": "Web Scraper",
-            "category": "skills",
-            "description": "Core web scraping and navigation functionality",
-            "version": "1.0.0",
-            "size": "120KB",
-            "installed": True,
-            "requires_key": False,
-        },
-        {
-            "id": "skill-captcha",
-            "name": "Captcha Solver",
-            "category": "skills",
-            "description": "Solve CAPTCHAs and challenges",
-            "version": "1.0.0",
-            "size": "200KB",
-            "installed": False,
-            "requires_key": True,
-        },
-        {
-            "id": "skill-stealth",
-            "name": "Stealth Mode",
-            "category": "skills",
-            "description": "Anti-detection and fingerprint masking",
-            "version": "1.0.0",
-            "size": "180KB",
             "installed": False,
             "requires_key": False,
         },
@@ -322,10 +259,6 @@ _installed_plugins: set[str] = {
     "mcp-search",
     "mcp-html",
     "mcp-python-sandbox",
-    "skill-planner",
-    "skill-navigator",
-    "skill-extractor",
-    "skill-verifier",
     "proc-json",
     "proc-csv",
     "proc-python",
@@ -404,10 +337,24 @@ async def get_categories() -> dict[str, Any]:
     """Get plugin categories with descriptions."""
     return {
         "categories": [
-            {"id": "apis", "name": "API Providers", "description": "LLM and AI service providers", "icon": "🔌"},
-            {"id": "mcps", "name": "MCP Tools", "description": "Model Context Protocol tools", "icon": "🔧"},
-            {"id": "skills", "name": "Skills/Agents", "description": "Specialized agent capabilities", "icon": "🤖"},
-            {"id": "processors", "name": "Data Processors", "description": "Data transformation tools", "icon": "📊"},
+            {
+                "id": "apis",
+                "name": "API Providers",
+                "description": "LLM and AI service providers",
+                "icon": "🔌",
+            },
+            {
+                "id": "mcps",
+                "name": "MCP Tools",
+                "description": "Model Context Protocol tools",
+                "icon": "🔧",
+            },
+            {
+                "id": "processors",
+                "name": "Data Processors",
+                "description": "Data transformation tools",
+                "icon": "📊",
+            },
         ],
     }
 
@@ -428,7 +375,7 @@ async def list_tools(category: str | None = None) -> dict[str, Any]:
             tools = []
     else:
         tools = get_all_tools()
-    
+
     return {
         "tools": [
             {
@@ -450,7 +397,7 @@ async def get_tool_details(tool_name: str) -> dict[str, Any]:
     tool = get_tool(tool_name)
     if not tool:
         raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
-    
+
     return {
         "name": tool.name,
         "description": tool.description,
@@ -465,7 +412,7 @@ async def get_tool_details(tool_name: str) -> dict[str, Any]:
 async def get_registry_endpoint() -> dict[str, Any]:
     """Get full plugin registry with all tools."""
     plugins = get_all_plugins()
-    
+
     return {
         "plugins": [
             {
@@ -571,10 +518,6 @@ async def uninstall_plugin(action: PluginAction) -> dict[str, Any]:
         "mcp-search",
         "mcp-html",
         "mcp-python-sandbox",
-        "skill-planner",
-        "skill-navigator",
-        "skill-extractor",
-        "skill-verifier",
         "proc-json",
         "proc-python",
         "proc-pandas",

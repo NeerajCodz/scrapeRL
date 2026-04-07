@@ -460,7 +460,18 @@ def _create_intelligent_navigation_plan(instructions: str, assets: list[str]) ->
 
     # Site-specific strategy overrides
     if site_template and site_template.site_id == "github":
-        if "trending" in instructions_lower and "repo" in instructions_lower:
+        # Detect GitHub trending/top repos requests (flexible matching)
+        github_trending_signals = [
+            "trending" in instructions_lower,
+            "top" in instructions_lower and "repo" in instructions_lower,
+            "top" in instructions_lower and "project" in instructions_lower,
+            "best" in instructions_lower and "repo" in instructions_lower,
+            "popular" in instructions_lower and "repo" in instructions_lower,
+            "this week" in instructions_lower,
+            "this month" in instructions_lower,
+            "today" in instructions_lower and "repo" in instructions_lower,
+        ]
+        if any(github_trending_signals):
             return _plan_from_site_template(
                 site_template,
                 strategy_override="github_trending",
