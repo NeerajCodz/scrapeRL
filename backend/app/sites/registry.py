@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -49,15 +50,41 @@ def _normalize_domain(value: str) -> str:
     return lowered
 
 
+def _coerce_asset_to_url(asset: str) -> str | None:
+    """Normalize URL-like assets, including bare domains such as github.com."""
+
+    candidate = asset.strip()
+    if not candidate or any(ch.isspace() for ch in candidate):
+        return None
+
+    normalized = candidate
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized):
+        normalized = f"https://{normalized}"
+
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    host = (parsed.hostname or "").lower()
+    if host != "localhost" and not re.match(r"^(?:[a-z0-9-]+\.)+[a-z]{2,63}$", host) and not re.match(
+        r"^\d{1,3}(?:\.\d{1,3}){3}$",
+        host,
+    ):
+        return None
+
+    return normalized
+
+
 def _extract_domains_from_assets(assets: list[str]) -> list[str]:
     """Extract normalized domains from URL assets."""
 
     domains: list[str] = []
     for asset in assets:
-        parsed = urlparse(asset.strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        normalized_url = _coerce_asset_to_url(asset)
+        if not normalized_url:
             continue
-        domain = _normalize_domain(parsed.netloc)
+        parsed = urlparse(normalized_url)
+        domain = _normalize_domain(parsed.hostname or parsed.netloc)
         if domain not in domains:
             domains.append(domain)
     return domains

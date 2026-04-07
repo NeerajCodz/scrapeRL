@@ -282,7 +282,12 @@ def _create_tool_call_step(
 ) -> dict[str, Any]:
     """Create a tool call step event."""
     step_number = len(session.get("steps", [])) + 1
-    message = f"{tool_name}({', '.join(f'{k}={repr(v)[:20]}' for k, v in parameters.items())})"
+
+    def _format_arg(value: Any) -> str:
+        rendered = json.dumps(value, default=str)
+        return rendered if len(rendered) <= 40 else f"{rendered[:37]}..."
+
+    message = f"{tool_name}({', '.join(f'{k}={_format_arg(v)}' for k, v in parameters.items())})"
     if status == "completed" and result:
         result_preview = ", ".join(f"{k}={v}" for k, v in list(result.items())[:2])
         message = f"{tool_name}() → {result_preview[:50]}"
@@ -515,8 +520,42 @@ def _create_intelligent_navigation_plan(instructions: str, assets: list[str]) ->
 def _is_url_asset(asset: str) -> bool:
     """Check whether an asset string is a URL."""
 
-    parsed = urlparse(asset.strip())
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    return _coerce_url_asset(asset) is not None
+
+
+def _looks_like_host(host: str) -> bool:
+    """Return True when host resembles a real domain, localhost, or IPv4."""
+
+    lowered = host.lower()
+    if lowered == "localhost":
+        return True
+
+    if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", lowered):
+        return True
+
+    return bool(re.match(r"^(?:[a-z0-9-]+\.)+[a-z]{2,63}$", lowered))
+
+
+def _coerce_url_asset(asset: str) -> str | None:
+    """Normalize URL-like asset strings (supports bare domains such as github.com)."""
+
+    candidate = asset.strip()
+    if not candidate or any(ch.isspace() for ch in candidate):
+        return None
+
+    normalized = candidate
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized):
+        normalized = f"https://{normalized}"
+
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    host = (parsed.hostname or "").strip().lower()
+    if not host or not _looks_like_host(host):
+        return None
+
+    return normalized
 
 
 def _discover_assets_for_query(query: str) -> list[str]:
@@ -610,8 +649,11 @@ async def _resolve_assets(
         candidate = asset.strip()
         if not candidate:
             continue
-        if _is_url_asset(candidate):
-            resolved.append(candidate)
+
+        normalized_url = _coerce_url_asset(candidate)
+        if normalized_url:
+            if normalized_url not in resolved:
+                resolved.append(normalized_url)
             continue
 
         discovered: list[str] = []
