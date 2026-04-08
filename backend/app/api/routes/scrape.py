@@ -1812,6 +1812,34 @@ def _rows_relevance_score(rows: list[dict[str, Any]], instructions: str | None) 
     return sum(row_scores[:top_n]) / top_n
 
 
+def _parse_column_names(output_instructions: str | None) -> list[str]:
+    """Parse column names from output instructions.
+    
+    Examples:
+        "csv of title, points" -> ["title", "points"]
+        "json with heading and description" -> ["heading", "description"]
+        "title, url, views" -> ["title", "url", "views"]
+    """
+    if not output_instructions:
+        return []
+    
+    # Remove common prefixes
+    text = output_instructions.lower()
+    for prefix in ["csv of ", "json of ", "json with ", "fields: "]:
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+            break
+    
+    # Split on commas and clean
+    columns = [col.strip() for col in text.split(",")]
+    
+    # Also try splitting on "and" if no commas found
+    if len(columns) == 1 and " and " in columns[0]:
+        columns = [col.strip() for col in columns[0].split(" and ")]
+    
+    return [col for col in columns if col]
+
+
 def _fallback_extraction_code(output_instructions: str | None, instructions: str | None = None) -> str:
     """Build deterministic extraction code when live LLM code generation is unavailable."""
 
@@ -2540,10 +2568,12 @@ REQUIREMENTS:
 1. The `soup` variable is already provided as a BeautifulSoup object
 2. Extract data matching the user's output_instructions: "{request.output_instructions}"
 3. Return `extracted_data` as a list of dictionaries
-4. Column names MUST exactly match: {request.output_instructions.replace('csv of ', '').split(', ') if request.output_instructions else []}
+4. Column names MUST exactly match: {_parse_column_names(request.output_instructions) if request.output_instructions else []}
 5. Handle missing data gracefully (use empty string "" for missing fields)
-6. Extract username and repo separately if they appear together (e.g., "user/repo")
-7. Do not include extra columns that were not requested
+6. Extract ACTUAL text content from HTML elements, not empty strings
+7. Look for the most relevant elements containing the requested data
+8. If data appears in different formats (e.g., "123 points" or "123"), extract just the number
+9. Do not include extra columns that were not requested
 
 EXAMPLE OUTPUT FORMAT:
 extracted_data = [
