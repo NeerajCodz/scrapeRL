@@ -46,3 +46,30 @@ def test_get_state(client: TestClient, sample_task: dict) -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["episode_id"] == episode_id
+
+
+def test_openenv_reset_alias(client: TestClient, sample_task: dict) -> None:
+    """Test OpenEnv-compatible reset alias at root path."""
+    response = client.post("/reset", json={"task": sample_task["task_id"]})
+    assert response.status_code == 200
+    data = response.json()
+    assert "episode_id" in data
+    assert data["task_id"] == sample_task["task_id"]
+
+
+def test_openenv_step_alias_with_string_action(client: TestClient, sample_task: dict) -> None:
+    """Test OpenEnv-compatible step alias accepts string action payloads."""
+    reset_response = client.post("/reset", json={"task_id": sample_task["task_id"]})
+    assert reset_response.status_code == 200
+    episode_id = reset_response.json()["episode_id"]
+
+    step_response = client.post(
+        "/step",
+        json={
+            "episode_id": episode_id,
+            "action": "done",
+        },
+    )
+    assert step_response.status_code == 200
+    data = step_response.json()
+    assert "done" in data
