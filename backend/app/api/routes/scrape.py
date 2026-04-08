@@ -707,8 +707,8 @@ def _extract_markdown_link_rows(
     # Match complex links with embedded images: [![Image](img_url) Text](link_url)
     # This captures the text after the image and the final link
     complex_link_pattern = re.compile(r'\[!\[Image[^\]]*\]\([^\)]+\)\s*([^\]]+)\]\((https?://[^\s"\)]+)\)')
-    # Match view/viewer counts anywhere (including "47.2K viewers" format)
-    views_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*(?:views?|viewers?)', re.IGNORECASE)
+    # Match view/viewer/point counts anywhere (including "47.2K viewers", "787 points" format)
+    views_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*(?:views?|viewers?|points?)', re.IGNORECASE)
     likes_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*likes?', re.IGNORECASE)
     comments_pattern = re.compile(r'(\d+(?:[.,]\d+)?[KkMmBb]?)\s*comments?', re.IGNORECASE)
     date_pattern = re.compile(r'\b(today|yesterday|\d+\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\s+ago)\b', re.IGNORECASE)
@@ -873,7 +873,7 @@ def _extract_markdown_link_rows(
                     row[col] = clean_title[:160]
                 elif lower_col in {"content", "summary", "description"}:
                     row[col] = clean_title[:320]
-                elif lower_col in {"views", "view_count", "viewers"}:
+                elif lower_col in {"views", "view_count", "viewers", "points", "score", "upvotes"}:
                     row[col] = metrics["views"]
                 elif lower_col in {"likes", "like_count"}:
                     row[col] = metrics["likes"]
@@ -1012,20 +1012,61 @@ async def _search_recovery_rows(
     output_instructions: str | None,
     row_limit: int,
 ) -> tuple[list[dict[str, Any]], list[str], str | None, float]:
-    """Search-guided generic recovery for low-relevance extraction results."""
+    """Search-guided generic recovery for low-relevance extraction results.
+    
+    IMPORTANT: Prioritize the user's specified site - try alternative paths on the same domain
+    before resorting to external search engines.
+    """
 
     best_rows: list[dict[str, Any]] = []
     best_columns: list[str] = []
     best_source: str | None = None
     best_score = 0.0
 
+    # Normalize the base URL
+    normalized = _coerce_url_asset(base_url) or base_url
+    if "://" not in normalized:
+        normalized = f"https://{normalized}"
+    parsed = urlparse(normalized)
+    
+    # FIRST: Try alternative paths on the SAME SITE (stay on user's specified domain)
+    alternative_paths = _infer_navigation_paths(instructions)
+    for alt_path in alternative_paths[:4]:
+        alt_url = f"{parsed.scheme}://{parsed.netloc}{alt_path}"
+        text_payload = _fetch_text_render_markdown(alt_url, timeout_seconds=12)
+        if not text_payload:
+            continue
+        markdown, source_url = text_payload
+        rows, columns = _extract_rows_from_text_render(
+            markdown=markdown,
+            source_url=source_url,
+            output_instructions=output_instructions,
+            instructions=instructions,
+            row_limit=row_limit,
+        )
+        if not _rows_have_signal(rows):
+            continue
+        score = _rows_relevance_score(rows, instructions)
+        if score > best_score or (
+            abs(score - best_score) <= 0.0001 and len(rows) > len(best_rows)
+        ):
+            best_rows = rows
+            best_columns = columns
+            best_source = source_url
+            best_score = score
+
+    # If we found good data on the user's site, return it
+    if best_score > 0.25:
+        return best_rows, best_columns, best_source, best_score
+
+    # SECOND: Only as last resort, try external search (duckduckgo)
     queries = _build_recovery_queries(base_url, instructions)
-    for query in queries[:3]:
-        discovered_urls = await _search_urls_with_mcp(query, max_results=8)
+    for query in queries[:2]:
+        discovered_urls = await _search_urls_with_mcp(query, max_results=5)
         if not discovered_urls:
             discovered_urls = _discover_assets_for_query(query)
 
-        for candidate_url in discovered_urls[:5]:
+        for candidate_url in discovered_urls[:3]:
             text_payload = _fetch_text_render_markdown(candidate_url, timeout_seconds=12)
             if not text_payload:
                 continue
@@ -1468,15 +1509,16 @@ def _infer_navigation_paths(instructions: str | None) -> list[str]:
     """Infer common navigation paths based on user intent - works generically across sites."""
     
     if not instructions:
-        return []
+        return ["/"]  # Default to homepage
     
     instruction_text = instructions.lower()
     paths: list[str] = []
     
     # Trending/popular intent - common paths across many sites
+    # Include "/" (homepage) because many sites show top content on homepage
     if any(token in instruction_text for token in ("trending", "popular", "top", "hot", "best")):
         paths.extend([
-            "/feed/trending",
+            "/",  # Homepage often shows top/trending content (HN, Reddit, etc.)
             "/trending",
             "/popular",
             "/explore",
@@ -1551,10 +1593,11 @@ def _fallback_navigation_url(
 ) -> str:
     """Derive a deterministic navigation URL using plan/template hints when LLM is unavailable.
     
-    Uses intelligent path inference that works generically across sites:
+    Strategy: Prioritize DIRECT SITE ACCESS over search when user specifies a site.
     1. Template target URLs (if available)
-    2. For top/trending/popular requests: PREFER SEARCH URLs (work without auth)
-    3. Direct path navigation as fallback
+    2. Inferred navigation paths (trending, popular, etc.)
+    3. Search only for EXPLICIT search intent
+    4. Return the base URL (trust the site content)
     """
 
     normalized = _coerce_url_asset(base_url) or base_url
@@ -1590,28 +1633,22 @@ def _fallback_navigation_url(
             if search_target:
                 return _apply_text_render_proxy(search_target)
 
-    # 2. For "top/trending/popular" queries, PREFER SEARCH URLs
-    # Search results typically work without authentication and show actual content
-    ranked_intent = any(token in instruction_text for token in ("trending", "popular", "top", "best", "music", "video"))
-    if ranked_intent:
-        search_url = _build_search_navigation_url(normalized, instructions)
-        if search_url:
-            return _apply_text_render_proxy(search_url)
-    
-    # 3. Try direct navigation paths as fallback
+    # 2. Try direct navigation paths FIRST (trending, hot, etc.)
+    # These are direct site pages, not search queries
     inferred_paths = _infer_navigation_paths(instructions)
     if inferred_paths:
         best_path = inferred_paths[0]
         inferred_url = f"{parsed.scheme}://{parsed.netloc}{best_path}"
         return _apply_text_render_proxy(inferred_url)
     
-    # 4. For explicit search intents, build a search URL
-    search_intent = any(token in instruction_text for token in ("search", "find", "looking for"))
+    # 3. Only use site-internal search for EXPLICIT search intents
+    search_intent = any(token in instruction_text for token in ("search for", "find ", "looking for", "search:"))
     if search_intent:
         search_url = _build_search_navigation_url(normalized, instructions)
         if search_url:
             return _apply_text_render_proxy(search_url)
 
+    # 4. Return the base URL - trust the site content (homepage often has what user wants)
     return _apply_text_render_proxy(normalized)
 
 
@@ -2664,7 +2701,10 @@ Return ONLY executable Python code, no explanations or markdown:"""
 
         relevance_score = _rows_relevance_score(extracted_data, request.instructions)
         recovery_keywords = _instruction_keywords(request.instructions, max_keywords=8)
-        if _rows_have_signal(extracted_data) and recovery_keywords and relevance_score < 0.22:
+        
+        # Only attempt recovery if we have NO useful signal from the user's specified site
+        # If we have data with signal, trust the user's site - don't go to external search
+        if not _rows_have_signal(extracted_data) and recovery_keywords:
             step_num += 1
             yield _record_step(
                 session,
@@ -2676,7 +2716,7 @@ Return ONLY executable Python code, no explanations or markdown:"""
                     message="agent.recover_relevance(query)",
                     extracted_data={
                         "tool_name": "agent.recover_relevance",
-                        "tool_description": "Search-guided relevance recovery for low-signal extraction output",
+                        "tool_description": "Search-guided relevance recovery for empty extraction output",
                         "parameters": {
                             "keywords": recovery_keywords,
                             "baseline_relevance": round(relevance_score, 3),
@@ -2692,7 +2732,8 @@ Return ONLY executable Python code, no explanations or markdown:"""
                 output_instructions=request.output_instructions,
                 row_limit=requested_limit,
             )
-            improved = _rows_have_signal(recovered_rows) and recovered_score > (relevance_score + 0.05)
+            # Only use recovery data if it's significantly better AND provides signal
+            improved = _rows_have_signal(recovered_rows) and recovered_score > 0.3 and len(recovered_rows) >= 3
             if improved:
                 extracted_data = recovered_rows
                 output_columns = recovered_columns or output_columns
