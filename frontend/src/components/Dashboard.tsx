@@ -490,7 +490,7 @@ export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({ episodes: 0, steps: 0, totalReward: 0, avgReward: 0 });
 
   // API Queries
-  const { data: health } = useQuery({
+  const { data: health, isError: healthError } = useQuery({
     queryKey: ['health'],
     queryFn: () => apiClient.healthCheck(),
     refetchInterval: 5000,
@@ -863,7 +863,15 @@ export const Dashboard: React.FC = () => {
   };
 
   // Check system status
-  const isSystemOnline = health?.status === 'healthy';
+  const normalizedHealthStatus = typeof health?.status === 'string'
+    ? health.status.toLowerCase()
+    : null;
+  const isSystemOnline = !healthError && (
+    normalizedHealthStatus === null
+    || normalizedHealthStatus === 'healthy'
+    || normalizedHealthStatus === 'ok'
+    || normalizedHealthStatus === 'ready'
+  );
 
   // Show info popup
   const showInfo = (title: string, description: string, details?: Record<string, string>) => {

@@ -273,11 +273,21 @@ export const apiClient = {
 
   // Health Check
   async healthCheck(): Promise<{ status: string; version: string }> {
-    const response = await fetch(`${API_BASE}/health`);
+    const response = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
     if (!response.ok) {
       throw new APIError('Health check failed', response.status);
     }
-    return response.json();
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+
+    const text = await response.text();
+    try {
+      return JSON.parse(text) as { status: string; version: string };
+    } catch {
+      return { status: 'healthy', version: 'unknown' };
+    }
   },
 
   // Scraping with streaming

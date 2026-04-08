@@ -101,6 +101,14 @@ export const Settings: React.FC<SettingsProps> = ({ className }) => {
     refetchInterval: 10000,
   });
 
+  const normalizedHealthStatus = typeof health?.status === 'string'
+    ? health.status.toLowerCase()
+    : '';
+  const isBackendOnline =
+    normalizedHealthStatus === 'healthy'
+    || normalizedHealthStatus === 'ok'
+    || normalizedHealthStatus === 'ready';
+
   // Mutation to update API key
   const updateApiKeyMutation = useMutation({
     mutationFn: async ({ provider, api_key }: { provider: string; api_key: string }) => {
@@ -223,7 +231,7 @@ export const Settings: React.FC<SettingsProps> = ({ className }) => {
                     <span className="text-xs text-gray-400">Backend</span>
                   </div>
                   <p className="text-sm font-medium text-white mt-1">
-                    {health?.status === 'ok' ? 'Connected' : 'Disconnected'}
+                    {isBackendOnline ? 'Connected' : 'Disconnected'}
                   </p>
                 </div>
                 <div className="p-3 bg-gray-900/50 rounded-lg">
@@ -588,8 +596,8 @@ export const Settings: React.FC<SettingsProps> = ({ className }) => {
         {/* Status Footer */}
         <div className="p-4 border-t border-gray-700/50">
           <div className="flex items-center gap-2">
-            <div className={classNames('w-2 h-2 rounded-full', health?.status === 'ok' ? 'bg-emerald-400' : 'bg-red-400')} />
-            <span className="text-xs text-gray-400">{health?.status === 'ok' ? 'System Online' : 'System Offline'}</span>
+            <div className={classNames('w-2 h-2 rounded-full', isBackendOnline ? 'bg-emerald-400' : 'bg-red-400')} />
+            <span className="text-xs text-gray-400">{isBackendOnline ? 'System Online' : 'System Offline'}</span>
           </div>
         </div>
       </div>
