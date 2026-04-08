@@ -182,6 +182,27 @@ HTML_TOOLS = [
         parameters={"selector": "string (optional)"},
         returns={"forms": "list[dict]", "count": "int"},
     ),
+    ToolDefinition(
+        name="html.extract_meta",
+        description="Extract page title and meta tags",
+        category=PluginCategory.PARSER,
+        parameters={"include_og": "bool"},
+        returns={"title": "string", "meta": "dict[string, string]", "count": "int"},
+    ),
+    ToolDefinition(
+        name="html.extract_jsonld",
+        description="Extract JSON-LD structured data blocks",
+        category=PluginCategory.PARSER,
+        parameters={"include_arrays": "bool"},
+        returns={"items": "list[dict]", "count": "int"},
+    ),
+    ToolDefinition(
+        name="html.detect_repeating_blocks",
+        description="Find repeated DOM block signatures for list extraction",
+        category=PluginCategory.PARSER,
+        parameters={"min_repetitions": "int"},
+        returns={"candidates": "list[dict]", "count": "int"},
+    ),
 ]
 
 # ==============================================================================
@@ -258,6 +279,27 @@ DATA_TOOLS = [
         category=PluginCategory.DATA,
         parameters={"condition": "string"},
         returns={"filtered_rows": "int", "original_rows": "int"},
+    ),
+    ToolDefinition(
+        name="data.dedupe_rows",
+        description="Remove duplicate rows from list-of-dicts data",
+        category=PluginCategory.DATA,
+        parameters={"rows": "list[dict]", "key_fields": "list[string]"},
+        returns={"rows": "list[dict]", "removed": "int", "count": "int"},
+    ),
+    ToolDefinition(
+        name="data.rank_rows",
+        description="Rank rows by score/value field",
+        category=PluginCategory.DATA,
+        parameters={"rows": "list[dict]", "sort_field": "string", "descending": "bool", "limit": "int"},
+        returns={"rows": "list[dict]", "sort_field": "string", "count": "int"},
+    ),
+    ToolDefinition(
+        name="data.select_columns",
+        description="Project rows to requested output columns",
+        category=PluginCategory.DATA,
+        parameters={"rows": "list[dict]", "columns": "list[string]"},
+        returns={"rows": "list[dict]", "columns": "list[string]", "count": "int"},
     ),
 ]
 
@@ -420,6 +462,20 @@ ANALYSIS_TOOLS = [
         parameters={"text": "string", "top_k": "int"},
         returns={"keywords": "list[string]", "scores": "list[float]"},
     ),
+    ToolDefinition(
+        name="analysis.infer_schema",
+        description="Infer field types and nullability from extracted rows",
+        category=PluginCategory.ANALYSIS,
+        parameters={"rows": "list[dict]"},
+        returns={"schema": "dict[string, dict]", "columns": "list[string]"},
+    ),
+    ToolDefinition(
+        name="analysis.score_relevance",
+        description="Score row relevance against user query/instructions",
+        category=PluginCategory.ANALYSIS,
+        parameters={"rows": "list[dict]", "query": "string"},
+        returns={"rows": "list[dict]", "count": "int"},
+    ),
 ]
 
 # ==============================================================================
@@ -476,6 +532,13 @@ EXTRACTION_TOOLS = [
         parameters={"text": "string", "platforms": "list[string]"},
         returns={"handles": "dict[string, list]", "count": "int"},
     ),
+    ToolDefinition(
+        name="extract.top_n",
+        description="Select top N rows from extracted dataset",
+        category=PluginCategory.EXTRACTION,
+        parameters={"rows": "list[dict]", "n": "int", "sort_field": "string"},
+        returns={"rows": "list[dict]", "count": "int"},
+    ),
 ]
 
 # ==============================================================================
@@ -517,6 +580,20 @@ VALIDATION_TOOLS = [
         category=PluginCategory.VALIDATION,
         parameters={"data": "any", "schema": "dict"},
         returns={"valid": "bool", "errors": "list[string]"},
+    ),
+    ToolDefinition(
+        name="validate.data_completeness",
+        description="Score completeness of extracted rows against required fields",
+        category=PluginCategory.VALIDATION,
+        parameters={"rows": "list[dict]", "fields": "list[string]"},
+        returns={"score": "float", "missing_counts": "dict[string, int]", "fields": "list[string]"},
+    ),
+    ToolDefinition(
+        name="validate.row_signal",
+        description="Estimate quality signal of extracted rows",
+        category=PluginCategory.VALIDATION,
+        parameters={"rows": "list[dict]"},
+        returns={"signal": "float", "completeness": "float", "uniqueness": "float"},
     ),
 ]
 

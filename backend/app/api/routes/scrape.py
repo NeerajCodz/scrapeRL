@@ -2547,6 +2547,100 @@ URL:"""
     # Get a larger sample of the HTML for LLM analysis (first 15000 chars to include content)
     html_sample = nav_obs.page_html[:15000]
     
+    # === AGENT TOOL CALLING: runtime-selected, registry-backed ===
+    agent_tool_calls = []
+    tool_call_results = []
+    tool_observations = ""
+
+    if live_llm_enabled:
+        try:
+            from app.agents.tool_caller import AgentToolCaller, ToolExecutor, summarize_tool_results
+
+            tool_caller = AgentToolCaller(model_router)
+            executor = ToolExecutor()
+
+            agent_tool_calls = await tool_caller.decide_tools(
+                task_description=(
+                    f"Extract {request.output_instructions or 'data'} from page content. "
+                    f"User instructions: {request.instructions}"
+                ),
+                context={
+                    "url": target_url,
+                    "html_length": len(nav_obs.page_html),
+                    "instructions": request.instructions,
+                    "output_format": request.output_format.value,
+                    "tools_used": [],
+                },
+                model=request.model,
+                max_tools=6,
+            )
+
+            if agent_tool_calls:
+                tool_decision_step = _record_step(
+                    session,
+                    ScrapeStep(
+                        step_number=len(session["steps"]),
+                        action="agent_decision",
+                        status="completed",
+                        message=f"Agent selected {len(agent_tool_calls)} runtime tools",
+                        reward=0.1,
+                        extracted_data={
+                            "tool_calls": [
+                                {
+                                    "tool": tool_call.tool_name,
+                                    "params": tool_call.parameters,
+                                    "reasoning": tool_call.reasoning,
+                                }
+                                for tool_call in agent_tool_calls
+                            ],
+                        },
+                        timestamp=_now_iso(),
+                    ),
+                )
+                yield tool_decision_step
+
+            tool_context = {
+                "soup": BeautifulSoup(nav_obs.page_html, "html.parser"),
+                "html": nav_obs.page_html,
+                "url": target_url,
+                "instructions": request.instructions or "",
+            }
+
+            for tool_call in agent_tool_calls:
+                result = await executor.execute_tool_call(tool_call, tool_context)
+                tool_call_results.append(result)
+
+                if result.success and isinstance(result.result, dict):
+                    for context_key in ("rows", "text", "data"):
+                        if context_key in result.result:
+                            tool_context[context_key] = result.result[context_key]
+
+                tool_exec_step = _record_step(
+                    session,
+                    ScrapeStep(
+                        step_number=len(session["steps"]),
+                        action="tool_call",
+                        status="completed" if result.success else "failed",
+                        message=f"Tool {result.tool_name}: {'ok' if result.success else 'failed'}",
+                        reward=0.05 if result.success else -0.02,
+                        extracted_data={
+                            "tool": result.tool_name,
+                            "success": result.success,
+                            "result_preview": str(result.result)[:200] if result.result is not None else None,
+                            "error": result.error,
+                            "duration_ms": result.duration_ms,
+                        },
+                        timestamp=_now_iso(),
+                    ),
+                )
+                yield tool_exec_step
+
+            if tool_call_results:
+                tool_observations = summarize_tool_results(tool_call_results)
+
+        except Exception as e:
+            logger.warning("Agent tool calling failed: %s", e)
+
     extraction_prompt = f"""You are a web scraping expert. Generate Python code to extract data from HTML.
 
 USER REQUEST:
@@ -2561,6 +2655,9 @@ HTML SAMPLE (first 15000 chars):
 ```
 
 {template_hint}
+
+AGENT TOOL OBSERVATIONS (runtime execution, not hardcoded):
+{tool_observations or "No additional tool observations collected."}
 
 TASK: Generate Python code using BeautifulSoup to extract the requested data.
 
