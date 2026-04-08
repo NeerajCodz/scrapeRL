@@ -89,6 +89,32 @@ npm run dev
 
 Frontend will be at **http://localhost:5173**
 
+## 🧪 OpenEnv Hackathon Inference Script
+
+This repository now includes a root-level **`inference.py`** for OpenEnv-style evaluation.
+
+### Required environment variables
+- `API_BASE_URL` (defaulted in script)
+- `MODEL_NAME` (defaulted in script)
+- `HF_TOKEN` (**required**, no default)
+
+### Run
+```bash
+python inference.py --task task_001 --benchmark openenv
+```
+
+### Output contract
+`inference.py` emits strict structured stdout lines:
+```text
+[START] task=<task_name> env=<benchmark> model=<model_name>
+[STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+[END] success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
+```
+
+Notes:
+- OpenAI client (`from openai import OpenAI`) is used as the default LLM caller.
+- The script attempts OpenEnv SDK runtime first and falls back to `/api/episode/reset` + `/api/episode/step`.
+
 ## 📡 API Endpoints
 
 ### Core Endpoints
