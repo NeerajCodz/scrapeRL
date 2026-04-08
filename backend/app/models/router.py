@@ -548,6 +548,7 @@ class SmartModelRouter:
                 # Strip provider prefix if present (e.g., "google/gemini-1.5-flash" -> "gemini-1.5-flash")
                 model_name = model_id.split("/", 1)[1] if "/" in model_id else model_id
                 logger.info(f"Attempting completion with {provider.PROVIDER_NAME}/{model_name}")
+                logger.debug(f"Router: model_id={model_id}, model_name={model_name}, provider={provider.PROVIDER_NAME}")
                 response = await provider.complete(messages, model_name, **kwargs)
 
                 # Track cost

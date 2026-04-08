@@ -277,10 +277,15 @@ class GoogleProvider(BaseProvider):
         **kwargs: Any,
     ) -> CompletionResponse:
         """Generate a completion using Google AI API."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"GoogleProvider.complete called with model={model}")
         await self._acquire_rate_limit()
 
         model = self._resolve_model(model)
+        logger.info(f"GoogleProvider after resolve: model={model}")
         model_info = self.get_model_info(model)
+        logger.info(f"GoogleProvider model_info: {model_info}")
         if not model_info:
             raise ModelNotFoundError(self.PROVIDER_NAME, model)
 
@@ -424,7 +429,15 @@ class GoogleProvider(BaseProvider):
                 message=message,
             )
         elif status == 404:
-            raise ModelNotFoundError(self.PROVIDER_NAME, "unknown")
+            # Extract model name from URL if possible
+            model_name = "unknown"
+            url = str(error.request.url)
+            if "/models/" in url:
+                try:
+                    model_name = url.split("/models/")[1].split(":")[0]
+                except Exception:
+                    pass
+            raise ModelNotFoundError(self.PROVIDER_NAME, model_name)
         else:
             raise ProviderError(message, self.PROVIDER_NAME, status)
 
