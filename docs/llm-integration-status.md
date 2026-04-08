@@ -1,17 +1,17 @@
-# LLM Integration Status Report
+# llm-integration-status-report
 
 **Date**: 2026-04-08  
-**Status**: ✅ LLM Extraction Pipeline WORKING (with caveats)
+**Status**:  LLM Extraction Pipeline WORKING (with caveats)
 
-## Summary
+## summary
 
 The AI-driven scraping system **IS functional** with certain LLM providers. The core issue was not the extraction logic, but model routing and provider compatibility.
 
 ---
 
-## ✅ What's Working
+## whats-working
 
-### 1. **Groq Provider - FULLY OPERATIONAL**
+### 1-groq-provider-fully-operational
 - **Model**: `llama-3.3-70b-versatile`
 - **Test**: example.com extraction
 - **Result**: Successfully extracted structured JSON data:
@@ -22,64 +22,64 @@ The AI-driven scraping system **IS functional** with certain LLM providers. The 
   }]
   ```
 - **Performance**: ~3-4 seconds per request
-- **Status**: ✅ PRODUCTION READY
+- **Status**:  PRODUCTION READY
 
-### 2. **Google Gemini Provider - OPERATIONAL** 
+### 2-google-gemini-provider-operational
 - **Models Available**: 
-  - `gemini-2.5-flash` ✅ WORKING
-  - `gemini-2.5-pro` ✅ WORKING  
-  - `gemini-2.0-flash` ✅ WORKING (rate limited in testing)
-  - `gemini-1.5-flash` ❌ NOT available with this API key
-  - `gemini-1.5-pro` ❌ NOT available with this API key
+  - `gemini-2.5-flash`  WORKING
+  - `gemini-2.5-pro`  WORKING  
+  - `gemini-2.0-flash`  WORKING (rate limited in testing)
+  - `gemini-1.5-flash`  NOT available with this API key
+  - `gemini-1.5-pro`  NOT available with this API key
 - **Test**: example.com extraction
 - **Result**: LLM calls successful, model resolution working
 - **Performance**: ~4-5 seconds per request
-- **Status**: ✅ OPERATIONAL (needs more testing on complex sites)
+- **Status**:  OPERATIONAL (needs more testing on complex sites)
 
-### 3. **Model Router - FIXED**
-- ✅ Now correctly strips provider prefix (`google/gemini-2.5-flash` → `gemini-2.5-flash`)
-- ✅ Handles both bare model names and `provider/model` format
-- ✅ Smart fallback to alternative models when primary fails
-- ✅ Proper error messages (fixed hardcoded "unknown" model error)
+### 3-model-router-fixed
+-  Now correctly strips provider prefix (`google/gemini-2.5-flash` → `gemini-2.5-flash`)
+-  Handles both bare model names and `provider/model` format
+-  Smart fallback to alternative models when primary fails
+-  Proper error messages (fixed hardcoded "unknown" model error)
 
-### 4. **AI Extraction Pipeline - CONFIRMED WORKING**
-- ✅ LLM navigation decisions (where to navigate based on instructions)
-- ✅ LLM code generation (generates BeautifulSoup extraction code)
-- ✅ Sandbox execution of generated code
-- ✅ Dynamic schema mapping to user's output_instructions
-- ✅ JSON and CSV output formatting
+### 4-ai-extraction-pipeline-confirmed-working
+-  LLM navigation decisions (where to navigate based on instructions)
+-  LLM code generation (generates BeautifulSoup extraction code)
+-  Sandbox execution of generated code
+-  Dynamic schema mapping to user's output_instructions
+-  JSON and CSV output formatting
 
 ---
 
-## ⚠️ Known Issues
+## known-issues
 
-### 1. **Output Not Appearing in Stream Response**
+### 1-output-not-appearing-in-stream-response
 - **Symptom**: LLM extraction runs successfully, data is generated (logs show "106 bytes JSON output"), but final streaming response doesn't contain the data
 - **Impact**: Frontend doesn't receive extracted data even though backend generates it
 - **Root Cause**: Likely issue in how `_agentic_scrape_stream()` yields final completion event
 - **Next Step**: Debug streaming response serialization
 
-### 2. **NVIDIA Provider Models Deprecated**
+### 2-nvidia-provider-models-deprecated
 - `deepseek-r1` - end of life (410 error)
 - Need to update to current NVIDIA models
 
-### 3. **Complex Site Extraction Needs Testing**
+### 3-complex-site-extraction-needs-testing
 - Simple sites (example.com) work perfectly
 - Complex sites (HackerNews, news sites) need verification
 - May need LLM prompt tuning for better extraction quality
 
 ---
 
-## 🔧 Technical Fixes Applied
+## technical-fixes-applied
 
-### Model Router (`backend/app/models/router.py`)
+### model-router-backend-app-models-router-py
 ```python
 # Strip provider prefix before calling provider
 model_name = model_id.split("/", 1)[1] if "/" in model_id else model_id
 response = await provider.complete(messages, model_name, **kwargs)
 ```
 
-### Google Provider (`backend/app/models/providers/google.py`)
+### google-provider-backend-app-models-providers-google-py
 ```python
 # Extract actual model name from 404 errors
 if status == 404:
@@ -90,46 +90,46 @@ if status == 404:
     raise ModelNotFoundError(self.PROVIDER_NAME, model_name)
 ```
 
-### Debug Logging Added
+### debug-logging-added
 - Router: Shows model_id and resolved model_name before provider call
 - GoogleProvider: Logs model name at each resolution step
 - Helps trace model name transformations through the stack
 
 ---
 
-## 📊 Test Results
+## test-results
 
 | Site | Model | Output Format | Status | Notes |
 |------|-------|---------------|--------|-------|
-| example.com | llama-3.3-70b-versatile | JSON | ✅ PASS | Perfect extraction |
-| example.com | gemini-2.5-flash | JSON | ✅ PASS | LLM calls successful |
-| news.ycombinator.com | llama-3.3-70b-versatile | CSV | ⚠️ PARTIAL | Data generated but not in response |
-| news.ycombinator.com | gemini-2.5-flash | CSV | ⚠️ PARTIAL | LLM working, output issue |
+| example.com | llama-3.3-70b-versatile | JSON |  PASS | Perfect extraction |
+| example.com | gemini-2.5-flash | JSON |  PASS | LLM calls successful |
+| news.ycombinator.com | llama-3.3-70b-versatile | CSV |  PARTIAL | Data generated but not in response |
+| news.ycombinator.com | gemini-2.5-flash | CSV |  PARTIAL | LLM working, output issue |
 
 ---
 
-## 🎯 Next Steps
+## next-steps
 
-### High Priority
+### high-priority
 1. **Fix streaming response serialization** - Ensure generated data appears in final event
 2. **Test 10-20 diverse websites** with working models (Groq, Gemini 2.5)
 3. **Verify CSV output** on complex sites (HN, Reddit, news sites)
 4. **Update NVIDIA provider** with current models
 
-### Medium Priority
+### medium-priority
 5. **Optimize LLM prompts** for better extraction quality
 6. **Add extraction result validation** before returning
 7. **Implement retry logic** for failed extractions
 8. **Add cost tracking** per provider/model
 
-### Low Priority
+### low-priority
 9. **Add more Groq models** (llama-3.1, mixtral, etc.)
 10. **Test embeddings integration** with Gemini embedding models
 11. **Performance optimization** - cache common extractions
 
 ---
 
-## 💡 Key Learnings
+## key-learnings
 
 1. **API Key Limitations**: The Gemini API key only has access to 2.x models, not 1.5.x. Always verify available models with the API before assuming.
 
@@ -143,9 +143,9 @@ if status == 404:
 
 ---
 
-## 🔑 Working Configuration
+## working-configuration
 
-### Example Request (Groq):
+### example-request-groq
 ```json
 {
   "assets": ["example.com"],
@@ -157,7 +157,7 @@ if status == 404:
 }
 ```
 
-### Example Request (Gemini):
+### example-request-gemini
 ```json
 {
   "assets": ["news.ycombinator.com"],
@@ -171,7 +171,7 @@ if status == 404:
 
 ---
 
-## 📝 Conclusion
+## conclusion
 
 **The AI-driven extraction system is fundamentally sound and working.** The remaining issues are:
 1. Response serialization (data not appearing in final event)
@@ -179,3 +179,18 @@ if status == 404:
 3. Model catalog updates (NVIDIA models deprecated)
 
 Once the streaming response issue is fixed, the system will be **fully operational** for generic web scraping with AI agents on ANY website.
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

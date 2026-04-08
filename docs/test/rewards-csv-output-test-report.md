@@ -1,20 +1,20 @@
-# Rewards & CSV Output Test Report
+# rewards-and-csv-output-test-report
 
 **Date:** 2026-04-05
 **Version:** v2.1.0
 **Author:** NeerajCodz
 
-## Overview
+## overview
 
 This test report validates the fixes made to the reward calculation system and CSV output formatting in the ScrapeRL agentic web scraper.
 
-## Issues Fixed
+## issues-fixed
 
 1. **Reward Function**: Previously showing `+0.00` for all steps except `complete`
 2. **CSV Output**: Returning nested structure instead of clean CSV data
 3. **Memory Display**: Memory entries not visible in frontend
 
-## Reward Structure (Post-Fix)
+## reward-structure-post-fix
 
 | Step Type | Reward | Description |
 |-----------|--------|-------------|
@@ -27,34 +27,34 @@ This test report validates the fixes made to the reward calculation system and C
 | extract | +0.50 per item | Based on extraction count |
 | complete | +1.00 | Completion bonus |
 
-## Test Results (15 Tests Total)
+## test-results-15-tests-total
 
-### Initial 5 Tests
+### initial-5-tests
 
 | Test | URL | Output Format | Status | Reward | Duration |
 |------|-----|---------------|--------|--------|----------|
-| GitHub Trending | github.com/trending | CSV | ✅ PASS | 7.50 | 2.28s |
-| HackerNews | news.ycombinator.com | JSON | ✅ PASS | 7.356 | 1.40s |
-| Wikipedia | en.wikipedia.org | Text | ✅ PASS | 4.877 | 1.77s |
-| PyPI | pypi.org/project/requests | JSON | ✅ PASS | 4.877 | 0.36s |
-| NPM | npmjs.com/package/express | Markdown | ✅ PASS | 4.744 | 0.18s |
+| GitHub Trending | github.com/trending | CSV |  PASS | 7.50 | 2.28s |
+| HackerNews | news.ycombinator.com | JSON |  PASS | 7.356 | 1.40s |
+| Wikipedia | en.wikipedia.org | Text |  PASS | 4.877 | 1.77s |
+| PyPI | pypi.org/project/requests | JSON |  PASS | 4.877 | 0.36s |
+| NPM | npmjs.com/package/express | Markdown |  PASS | 4.744 | 0.18s |
 
-### Additional 10 Tests
+### additional-10-tests
 
 | Test | URL | Status | Reward |
 |------|-----|--------|--------|
-| Reddit | reddit.com/r/programming | ✅ PASS | 9.158 |
-| MDN Docs | developer.mozilla.org | ✅ PASS | 4.877 |
-| DuckDuckGo | duckduckgo.com | ✅ PASS | 7.193 |
-| Kaggle | kaggle.com/datasets | ✅ PASS | 6.970 |
-| DevTo | dev.to | ✅ PASS | 7.289 |
-| Product Hunt | producthunt.com | ✅ PASS | 9.545 |
-| HN Jobs | news.ycombinator.com/jobs | ✅ PASS | 7.356 |
-| Python Docs | docs.python.org | ✅ PASS | 4.877 |
-| Rust Docs | doc.rust-lang.org | ✅ PASS | 4.877 |
-| Go Docs | go.dev/doc | ✅ PASS | 4.877 |
+| Reddit | reddit.com/r/programming |  PASS | 9.158 |
+| MDN Docs | developer.mozilla.org |  PASS | 4.877 |
+| DuckDuckGo | duckduckgo.com |  PASS | 7.193 |
+| Kaggle | kaggle.com/datasets |  PASS | 6.970 |
+| DevTo | dev.to |  PASS | 7.289 |
+| Product Hunt | producthunt.com |  PASS | 9.545 |
+| HN Jobs | news.ycombinator.com/jobs |  PASS | 7.356 |
+| Python Docs | docs.python.org |  PASS | 4.877 |
+| Rust Docs | doc.rust-lang.org |  PASS | 4.877 |
+| Go Docs | go.dev/doc |  PASS | 4.877 |
 
-### CSV Output Sample (GitHub Trending)
+### csv-output-sample-github-trending
 ```csv
 username,repo_name,stars,forks
 google-ai-edge,gallery,"16,334","1,485"
@@ -63,7 +63,7 @@ block,goose,"36,003","3,389"
 freeCodeCamp,freeCodeCamp,"441,088","44,069"
 ```
 
-## Memory System Verification
+## memory-system-verification
 
 **After running 15 tests:**
 - Short-term memory: 22 entries
@@ -73,7 +73,7 @@ freeCodeCamp,freeCodeCamp,"441,088","44,069"
 
 Memory correctly stores scrape requests and summaries for each session.
 
-## Step-by-Step Reward Breakdown (GitHub Trending)
+## step-by-step-reward-breakdown-github-trending
 
 ```
 Step 0: plugins       → +0.10 (enabled 3 plugins)
@@ -88,9 +88,9 @@ Step 5: complete      → +1.00 (completion)
 Total:                → 7.50
 ```
 
-## Key Fixes Applied
+## key-fixes-applied
 
-### 1. `scrape.py` - Reward Assignment
+### 1-scrape-py-reward-assignment
 ```python
 # Before
 ScrapeStep(action="plugins", reward=0.0, ...)
@@ -99,20 +99,20 @@ ScrapeStep(action="plugins", reward=0.0, ...)
 ScrapeStep(action="plugins", reward=0.1 if enabled_plugins else 0.0, ...)
 ```
 
-### 2. `format_output()` - Clean CSV
+### 2-format-output-clean-csv
 ```python
 # Added direct csv_output pass-through
 if isinstance(data, dict) and "csv_output" in data:
     return data["csv_output"]
 ```
 
-### 3. GitHub Trending Extraction
+### 3-github-trending-extraction
 ```python
 # Proper reward calculation for extraction
 extraction_reward = len(trending_repos) * 0.5 + (1.0 if len(trending_repos) >= 10 else 0.5)
 ```
 
-## Conclusion
+## conclusion
 
 All tests pass with proper reward accumulation and clean output formatting:
 
@@ -124,3 +124,18 @@ All tests pass with proper reward accumulation and clean output formatting:
 | Success Rate | 100% |
 
 The reward system now properly tracks and displays progress for each step in the scraping pipeline, and CSV output is clean and properly formatted.
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

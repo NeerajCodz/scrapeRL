@@ -1,16 +1,16 @@
-# Site Template Matrix Test Report
+# site-template-matrix-test-report
 
 **Date:** 2026-04-05  
 **Scope:** Backend site-template registry, agent integration, and full template coverage tests
 
-## Summary
+## summary
 
 - Inbuilt templates expanded to **56 sites**
 - Agents now load template context during planning/navigation
 - New API surface added: `/api/sites`, `/api/sites/{site_id}`, `/api/sites/match`
 - Full template test suite added and passing
 
-## Automated Tests
+## automated-tests
 
 Command:
 
@@ -29,19 +29,19 @@ Result:
   - API retrieval for every template
   - registry serialization completeness
 
-## Runtime Validation
+## runtime-validation
 
-### 1. Template catalog endpoint
+### 1-template-catalog-endpoint
 
 - `GET /api/sites`
 - Result: `count = 56`
 
-### 2. Template match endpoint
+### 2-template-match-endpoint
 
 - `POST /api/sites/match` with `https://reddit.com`
 - Result: `matched = true`, `site_id = reddit`
 
-### 3. Agent template self-reference
+### 3-agent-template-self-reference
 
 Reddit scrape stream validation confirmed:
 
@@ -49,13 +49,13 @@ Reddit scrape stream validation confirmed:
 - `planner_python.extracted_data.site_template_id = reddit`
 - `navigator_python.extracted_data.site_template_id = reddit`
 
-### 4. Strategy integration checks
+### 4-strategy-integration-checks
 
 - Reddit request → `navigation_strategy = reddit_trending`
 - GitHub trending request → `navigation_strategy = github_trending`
 - Generic known domains (e.g., YouTube) → `site_template_id` populated, strategy-aware exploration
 
-## Folder Structure Additions
+## folder-structure-additions
 
 ```text
 backend/app/sites/
@@ -68,7 +68,31 @@ backend/tests/test_sites/
   test_registry.py
 ```
 
-## Notes
+## notes
 
 - Reddit direct endpoints are network-blocked in this environment; scraper uses fallback strategy while still preserving template-aware agent flow.
 - Template-aware events are now visible in execution trace for debugging and orchestration transparency.
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `test/site-template-matrix-report.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

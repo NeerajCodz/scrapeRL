@@ -1,6 +1,6 @@
-# Agents System Design
+# agents-system-design
 
-## Overview
+## overview
 
 The agent runtime is a multi-agent, memory-aware RL orchestration layer for web extraction tasks. It supports:
 
@@ -10,9 +10,9 @@ The agent runtime is a multi-agent, memory-aware RL orchestration layer for web 
 - Explainable decision traces
 - Self-improvement from past episodes
 
-## Agent Roles
+## agent-roles
 
-### 1. Planner Agent
+### 1-planner-agent
 
 Builds a plan before action:
 
@@ -20,7 +20,7 @@ Builds a plan before action:
 - Tool selection plan
 - Risk and fallback path
 
-### 2. Navigator Agent
+### 2-navigator-agent
 
 Explores pages and search results:
 
@@ -29,7 +29,7 @@ Explores pages and search results:
 - Page relevance scoring
 - Site-template lookup (`/api/sites/match`) for domain-specific guidance
 
-### 3. Extractor Agent
+### 3-extractor-agent
 
 Extracts structured fields:
 
@@ -37,7 +37,7 @@ Extracts structured fields:
 - Adaptive chunk extraction
 - Long-page batch processing
 
-### 4. Verifier Agent
+### 4-verifier-agent
 
 Checks consistency and trust:
 
@@ -45,7 +45,7 @@ Checks consistency and trust:
 - Conflict resolution
 - Confidence calibration
 
-### 5. Memory Agent
+### 5-memory-agent
 
 Manages memory write/read/search:
 
@@ -53,16 +53,16 @@ Manages memory write/read/search:
 - Pattern persistence
 - Retrieval ranking and pruning
 
-## Execution Modes
+## execution-modes
 
-### Single-Agent
+### single-agent
 
 One policy handles all actions.
 
 Pros: low overhead, simple.
 Cons: weaker specialization.
 
-### Multi-Agent
+### multi-agent
 
 Coordinator delegates work:
 
@@ -72,7 +72,7 @@ Coordinator delegates work:
 4. Verifier validates outputs
 5. Memory Agent stores reusable patterns
 
-## Site Template Awareness
+## site-template-awareness
 
 Agents can reference inbuilt templates from `backend/app/sites/`:
 
@@ -83,7 +83,7 @@ Agents can reference inbuilt templates from `backend/app/sites/`:
 Pros: modular, robust, scalable.
 Cons: coordination overhead.
 
-## Agent Communication
+## agent-communication
 
 Shared channels:
 
@@ -107,7 +107,7 @@ Message schema:
 }
 ```
 
-## Decision Policy
+## decision-policy
 
 Policy input includes:
 
@@ -124,7 +124,7 @@ Policy output includes:
 - Rationale
 - Fallback action (optional)
 
-## Strategy Library
+## strategy-library
 
 Built-in strategy templates:
 
@@ -139,7 +139,7 @@ Strategy selection can be:
 - Manual (user setting)
 - Automatic (router based on task signature)
 
-## Self-Improving Agent Loop
+## self-improving-agent-loop
 
 After each episode:
 
@@ -149,7 +149,7 @@ After each episode:
 4. Store high-confidence selectors in long-term memory
 5. Penalize redundant navigation patterns
 
-## Explainable AI Mode
+## explainable-ai-mode
 
 Each action can emit:
 
@@ -165,7 +165,7 @@ Why: Pattern "span.product-price" had 0.93 historical confidence on similar doma
 Alternatives rejected: ".price-box .value" (lower confidence 0.58), regex-only extraction (unstable on this layout).
 ```
 
-## Human-in-the-Loop
+## human-in-the-loop
 
 Optional checkpoints:
 
@@ -179,7 +179,7 @@ Intervention modes:
 - `review`: pause on low-confidence steps
 - `strict`: require approval on all submit/fetch/verify actions
 
-## Scenario Simulator Hooks
+## scenario-simulator-hooks
 
 Agents can be tested against:
 
@@ -196,7 +196,7 @@ Simulation metrics:
 - Generalization score
 - Cost and latency
 
-## APIs
+## apis
 
 - `POST /api/agents/run`
 - `POST /api/agents/plan`
@@ -204,10 +204,34 @@ Simulation metrics:
 - `GET /api/agents/state/{episode_id}`
 - `GET /api/agents/trace/{episode_id}`
 
-## Dashboard Widgets
+## dashboard-widgets
 
 - Live thought stream
 - Agent role timeline
 - Inter-agent message feed
 - Strategy performance chart
 - Confidence and override panel
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `agents.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

@@ -1,18 +1,18 @@
-# AI Provider Test Report
+# ai-provider-test-report
 
 **Generated:** 2026-04-05 02:23:10  
 **Test Duration:** 23.50s  
 
-## Summary
+## summary
 
 - **Total Tests:** 10
-- **Passed:** ✅ 9
-- **Failed:** ❌ 1
+- **Passed:**  9
+- **Failed:**  1
 - **Success Rate:** 90.0%
 
-## Test Results
+## test-results
 
-### 1. Code Generation ✅ PASS
+### 1-code-generation-pass
 
 **Task Type:** code  
 **Provider:** nvidia  
@@ -55,7 +55,7 @@ def fibonacci(n):
 
 ---
 
-### 2. Data Extraction ✅ PASS
+### 2. Data Extraction  PASS
 
 **Task Type:** extraction  
 **Provider:** groq  
@@ -86,7 +86,7 @@ The key information extracted from the text is:
 
 ---
 
-### 3. Reasoning Task ✅ PASS
+### 3. Reasoning Task  PASS
 
 **Task Type:** reasoning  
 **Provider:** nvidia  
@@ -106,7 +106,7 @@ To determine which train is faster and by how much, we'll calculate the speed of
 \text{Speed} = \frac{\text{Distance}}{\text{Time}}
 \]
 
-### **First Train:**
+### first-train
 - **Distance:** 120 miles
 - **Time:** 2 hours
 
@@ -114,7 +114,7 @@ To determine which train is faster and by how much, we'll calculate the speed of
 \text{Speed}_1 = \frac{120 \text{ miles}}{2 \text{ hours}} = 60 \text{ mph}
 \]
 
-### **Second Train:**
+### second-train
 - **Distance:** 180 miles
 - **Time:** 3 hours
 
@@ -122,7 +122,7 @@ To determine which train is faster and by how much, we'll calculate the speed of
 \text{Speed}_2 = \frac{180 \text{ miles}}{3 \text{ hours}} = 60 \text{ mph}
 \]
 
-### **Comparison:**
+### comparison
 Both tr...
 ```
 
@@ -133,7 +133,7 @@ Both tr...
 
 ---
 
-### 4. General Question ✅ PASS
+### 4. General Question  PASS
 
 **Task Type:** general  
 **Provider:** groq  
@@ -162,7 +162,7 @@ These colors cannot be created by mixing other colors together, and they are the
 
 ---
 
-### 5. JSON Generation ✅ PASS
+### 5. JSON Generation  PASS
 
 **Task Type:** code  
 **Provider:** nvidia  
@@ -189,7 +189,7 @@ Here's a JSON object representing a user profile with the specified fields:
 }
 ```
 
-### Explanation:
+### explanation
 - **"name"**: A string representing the user's full name.
 - **"email"**: A string representing the user's email address.
 - **"age"**: A number representing the user's age.
@@ -203,7 +203,7 @@ Here's a JSON object representing a user profile with the specified fields:
 
 ---
 
-### 6. Text Summarization ✅ PASS
+### 6. Text Summarization  PASS
 
 **Task Type:** general  
 **Provider:** groq  
@@ -227,7 +227,7 @@ Artificial intelligence is revolutionizing various industries by automating task
 
 ---
 
-### 7. Math Problem ✅ PASS
+### 7. Math Problem  PASS
 
 **Task Type:** reasoning  
 **Provider:** nvidia  
@@ -263,7 +263,7 @@ Therefore, the value of x is 5.
 
 ---
 
-### 8. Creative Writing ✅ PASS
+### 8. Creative Writing  PASS
 
 **Task Type:** general  
 **Provider:** nvidia  
@@ -289,7 +289,7 @@ Glowing screen delight
 
 ---
 
-### 9. Code Debug ✅ PASS
+### 9. Code Debug  PASS
 
 **Task Type:** code  
 **Provider:** groq  
@@ -327,7 +327,7 @@ The original code `return a + b + 1` is incrementing the sum by `1`, which is no
 
 ---
 
-### 10. Complex Reasoning ❌ FAIL
+### 10. Complex Reasoning  FAIL
 
 **Task Type:** reasoning  
 **Provider:** nvidia  
@@ -352,3 +352,18 @@ If all roses are flowers, and some flowers fade quickly, can we conclude that so
 |----------|-------|--------|--------|--------------|-------------|
 | groq | 4 | 4 | 0 | 100.0% | 0.70s |
 | nvidia | 6 | 5 | 1 | 83.3% | 3.45s |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

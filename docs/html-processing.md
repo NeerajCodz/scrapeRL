@@ -1,6 +1,6 @@
-# 🌐 HTML Processing Engine
+# html-processing-engine
 
-## Table of Contents
+## table-of-contents
 1. [Overview](#overview)
 2. [Semantic Understanding](#semantic-understanding)
 3. [Content Classification](#content-classification)
@@ -12,11 +12,11 @@
 
 ---
 
-## Overview
+## overview
 
 The **HTML Processing Engine** provides advanced capabilities for understanding, parsing, and extracting data from complex web pages.
 
-### Challenges
+### challenges
 
 Modern web pages are challenging:
 - **Size:** 1MB+ of HTML
@@ -25,21 +25,21 @@ Modern web pages are challenging:
 - **Inconsistency:** Same site uses different structures across pages
 - **Obfuscation:** Anti-scraping measures (randomized classes, etc.)
 
-### Solution
+### solution
 
 Our engine provides:
-- ✅ **Semantic understanding** of page structure
-- ✅ **Content classification** (main content vs noise)
-- ✅ **Smart extraction** with pattern recognition
-- ✅ **Adaptive chunking** for large pages
-- ✅ **Batch processing** with deduplication
-- ✅ **Diff-based updates** for paginated content
+-  **Semantic understanding** of page structure
+-  **Content classification** (main content vs noise)
+-  **Smart extraction** with pattern recognition
+-  **Adaptive chunking** for large pages
+-  **Batch processing** with deduplication
+-  **Diff-based updates** for paginated content
 
 ---
 
-## Semantic Understanding
+## semantic-understanding
 
-### Architecture
+### architecture
 
 ```python
 class SemanticHTMLAnalyzer:
@@ -64,9 +64,9 @@ class SemanticHTMLAnalyzer:
         return structure
 ```
 
-### Semantic Regions
+### semantic-regions
 
-#### 1. Header Detection
+#### 1-header-detection
 
 ```python
 def detect_header(self, soup: BeautifulSoup) -> Optional[Tag]:
@@ -92,7 +92,7 @@ def detect_header(self, soup: BeautifulSoup) -> Optional[Tag]:
     return None
 ```
 
-#### 2. Main Content Detection
+#### 2-main-content-detection
 
 ```python
 def detect_main_content(self, soup: BeautifulSoup) -> Optional[Tag]:
@@ -140,7 +140,7 @@ def detect_main_content(self, soup: BeautifulSoup) -> Optional[Tag]:
     return None
 ```
 
-#### 3. Product Card Detection
+#### 3-product-card-detection
 
 ```python
 def detect_product_cards(self, soup: BeautifulSoup) -> List[Tag]:
@@ -180,9 +180,9 @@ def detect_product_cards(self, soup: BeautifulSoup) -> List[Tag]:
 
 ---
 
-## Content Classification
+## content-classification
 
-### Classifier
+### classifier
 
 ```python
 class ContentClassifier:
@@ -228,7 +228,7 @@ class ContentClassifier:
         }
 ```
 
-### Classification Rules
+### classification-rules
 
 ```python
 def classify_by_rules(self, element: Tag) -> Optional[str]:
@@ -272,9 +272,9 @@ def classify_by_rules(self, element: Tag) -> Optional[str]:
 
 ---
 
-## Smart Extraction
+## smart-extraction
 
-### Pattern-Based Extraction
+### pattern-based-extraction
 
 ```python
 class SmartExtractor:
@@ -307,7 +307,7 @@ class SmartExtractor:
         return ExtractionResult(value=None, confidence=0.0)
 ```
 
-### Field-Specific Patterns
+### field-specific-patterns
 
 ```python
 EXTRACTION_PATTERNS = {
@@ -378,7 +378,7 @@ EXTRACTION_PATTERNS = {
 }
 ```
 
-### Confidence Scoring
+### confidence-scoring
 
 ```python
 def score_extraction(self, value: Any, field_name: str, method: str) -> float:
@@ -418,9 +418,9 @@ def score_extraction(self, value: Any, field_name: str, method: str) -> float:
 
 ---
 
-## Adaptive Chunking
+## adaptive-chunking
 
-### Chunking Strategy
+### chunking-strategy
 
 ```python
 class AdaptiveChunker:
@@ -527,9 +527,9 @@ class AdaptiveChunker:
 
 ---
 
-## Batch Processing
+## batch-processing
 
-### Parallel Processing
+### parallel-processing
 
 ```python
 class BatchProcessor:
@@ -607,9 +607,9 @@ class BatchProcessor:
 
 ---
 
-## Diff-Based Updates
+## diff-based-updates
 
-### Incremental Processing
+### incremental-processing
 
 ```python
 class DiffProcessor:
@@ -666,9 +666,9 @@ class DiffProcessor:
 
 ---
 
-## Schema Detection
+## schema-detection
 
-### Auto-Detect Data Schemas
+### auto-detect-data-schemas
 
 ```python
 class SchemaDetector:
@@ -737,3 +737,27 @@ class SchemaDetector:
 ---
 
 **Next:** See [search-engine.md](./search-engine.md) for search optimization.
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `html-processing.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

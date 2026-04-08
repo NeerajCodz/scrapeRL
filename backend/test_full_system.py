@@ -163,7 +163,7 @@ class ScrapeRLTestSuite:
         report = self.reporter.generate_report()
         
         # Save report
-        report_path = Path(__file__).parent.parent / "docs" / "test" / "comprehensive_test_report.md"
+        report_path = Path(__file__).parent.parent / "docs" / "test" / "comprehensive-test-report.md"
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(report, encoding='utf-8')
         

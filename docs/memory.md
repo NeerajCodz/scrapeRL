@@ -1,6 +1,6 @@
-# 🧠 Unified Memory System
+# unified-memory-system
 
-## Table of Contents
+## table-of-contents
 1. [Overview](#overview)
 2. [Memory Architecture](#memory-architecture)
 3. [Memory Layers](#memory-layers)
@@ -11,11 +11,26 @@
 
 ---
 
-## Overview
+## overview
 
 The **Unified Memory System** is the most critical upgrade for the WebScraper-OpenEnv agent. It provides persistent, contextual, and hierarchical memory across episodes, enabling the agent to learn from past experiences, maintain reasoning context, and share knowledge across multiple agents.
 
-### Why Memory Matters
+## memory-api-contract
+
+| operation | endpoint |
+| --- | --- |
+| store-entry | `POST /api/memory/store` |
+| query-entries | `POST /api/memory/query` |
+| get-entry | `GET /api/memory/{entry_id}` |
+| update-entry | `PUT /api/memory/{entry_id}` |
+| delete-entry | `DELETE /api/memory/{entry_id}` |
+| layer-stats | `GET /api/memory/stats/overview` |
+| clear-layer | `DELETE /api/memory/clear/{memory_type}` |
+| consolidate | `POST /api/memory/consolidate` |
+
+For request and response details, see `api-reference.md`.
+
+### why-memory-matters
 
 Without memory:
 - Agents repeat the same mistakes across episodes
@@ -25,15 +40,15 @@ Without memory:
 - Limited by context window size
 
 With unified memory:
-- ✅ Learn successful extraction strategies
-- ✅ Remember failed approaches to avoid repetition
-- ✅ Maintain reasoning context across steps
-- ✅ Share discoveries across agent instances
-- ✅ Overcome context window limitations
+-  Learn successful extraction strategies
+-  Remember failed approaches to avoid repetition
+-  Maintain reasoning context across steps
+-  Share discoveries across agent instances
+-  Overcome context window limitations
 
 ---
 
-## Memory Architecture
+## memory-architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -67,9 +82,9 @@ With unified memory:
 
 ---
 
-## Memory Layers
+## memory-layers
 
-### 1. 🟢 Short-Term Memory (Per Episode)
+### 1-short-term-memory-per-episode
 
 **Purpose:** Tracks the current scraping session state.
 
@@ -117,7 +132,7 @@ episode_memory = {
 }
 ```
 
-### 2. 🔵 Working Memory (Agent Thinking)
+### 2-working-memory-agent-thinking
 
 **Purpose:** Temporary reasoning buffer for active decision-making.
 
@@ -160,7 +175,7 @@ working_memory = {
 }
 ```
 
-### 3. 🟡 Long-Term Memory (Persistent)
+### 3-long-term-memory-persistent
 
 **Purpose:** Store learned patterns, strategies, and historical data across all episodes.
 
@@ -237,7 +252,7 @@ similar_patterns = long_term_memory.search(
 ]
 ```
 
-### 4. 🔴 Shared Memory (Multi-Agent)
+### 4-shared-memory-multi-agent
 
 **Purpose:** Enable knowledge sharing across multiple agent instances.
 
@@ -283,13 +298,13 @@ agent_b_discovers = agent_b.shared_memory.receive_messages(
 
 ---
 
-## Memory Operations
+## memory-operations
 
-### Core Actions
+### core-actions
 
 The memory system exposes the following actions to the agent:
 
-#### 1. WRITE_MEMORY
+#### 1-write-memory
 Store information in the appropriate memory layer.
 
 ```python
@@ -319,7 +334,7 @@ Action(
 )
 ```
 
-#### 2. READ_MEMORY
+#### 2-read-memory
 Retrieve information from memory.
 
 ```python
@@ -344,7 +359,7 @@ Action(
 )
 ```
 
-#### 3. SEARCH_MEMORY
+#### 3-search-memory
 Advanced semantic search across memory layers.
 
 ```python
@@ -369,7 +384,7 @@ Action(
 )
 ```
 
-#### 4. SUMMARIZE_MEMORY
+#### 4-summarize-memory
 Compress and summarize memory to manage context window.
 
 ```python
@@ -381,7 +396,7 @@ class SummarizeMemoryAction(Action):
     preserve_keys: List[str]           # Never summarize these
 ```
 
-#### 5. PRUNE_MEMORY
+#### 5-prune-memory
 Remove low-value or outdated memories.
 
 ```python
@@ -394,9 +409,9 @@ class PruneMemoryAction(Action):
 
 ---
 
-## Implementation Details
+## implementation-details
 
-### Vector Database Integration
+### vector-database-integration
 
 **Supported Backends:**
 - **FAISS** (default, local, no external dependencies)
@@ -433,7 +448,7 @@ class MemoryEmbedder:
         return self.embedding_model.encode(query)
 ```
 
-### MCP Storage Integration
+### mcp-storage-integration
 
 **Storage Backends:**
 - **File System MCP** (local JSON/SQLite files)
@@ -461,7 +476,7 @@ class MemoryEmbedder:
 }
 ```
 
-### Memory Router
+### memory-router
 
 The **Memory Router** intelligently decides which memory layer to query based on the request:
 
@@ -490,7 +505,7 @@ class MemoryRouter:
         return layers if layers else ["long_term"]  # Default
 ```
 
-### Context Window Optimization
+### context-window-optimization
 
 **Problem:** LLMs have limited context windows. Memory must be compressed.
 
@@ -558,9 +573,9 @@ class MemoryPruner:
 
 ---
 
-## Configuration
+## configuration
 
-### Settings Panel
+### settings-panel
 
 **Memory Settings Tab:**
 ```python
@@ -600,10 +615,10 @@ class MemorySettings(BaseModel):
 │ Memory Settings                                              │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│ ☑ Enable Short-Term Memory (Episode)                        │
-│ ☑ Enable Working Memory (Reasoning)                         │
-│ ☑ Enable Long-Term Memory (Persistent)                      │
-│ ☐ Enable Shared Memory (Multi-Agent)                        │
+│  Enable Short-Term Memory (Episode)                        │
+│  Enable Working Memory (Reasoning)                         │
+│  Enable Long-Term Memory (Persistent)                      │
+│  Enable Shared Memory (Multi-Agent)                        │
 │                                                              │
 │ Memory Size Limits:                                          │
 │   Short-Term: [10] MB per episode                           │
@@ -619,7 +634,7 @@ class MemorySettings(BaseModel):
 │   Path:       [./memory_data          ] [Browse]            │
 │                                                              │
 │ Auto-Pruning:                                                │
-│   ☑ Enabled                                                  │
+│    Enabled                                                  │
 │   Threshold:  [0.3] (0.0 = keep all, 1.0 = keep only best) │
 │   Interval:   [24] hours                                    │
 │                                                              │
@@ -629,60 +644,60 @@ class MemorySettings(BaseModel):
 
 ---
 
-## Best Practices
+## best-practices
 
-### 1. Memory Hygiene
-✅ **Do:**
+### 1-memory-hygiene
+ **Do:**
 - Summarize episode memory before storing in long-term
 - Prune low-confidence patterns regularly
 - Validate patterns before adding to long-term memory
 - Tag memories with metadata (task_id, domain, confidence)
 
-❌ **Don't:**
+ **Don't:**
 - Store raw HTML in long-term memory (use summaries)
 - Keep failed patterns without analysis
 - Allow unbounded memory growth
 - Store sensitive data without encryption
 
-### 2. Query Optimization
-✅ **Do:**
+### 2-query-optimization
+ **Do:**
 - Use semantic search for conceptual queries ("how to extract price")
 - Use exact key lookup for known patterns
 - Apply filters to narrow search space
 - Limit results to top-K most relevant
 
-❌ **Don't:**
+ **Don't:**
 - Search all layers for every query (route intelligently)
 - Ignore relevance scores (filter low scores)
 - Retrieve full objects when summaries suffice
 
-### 3. Context Window Management
-✅ **Do:**
+### 3-context-window-management
+ **Do:**
 - Prioritize recent and high-confidence memories
 - Summarize old episodes aggressively
 - Use hierarchical memory retrieval (summary → details on demand)
 - Monitor token usage and trigger summarization proactively
 
-❌ **Don't:**
+ **Don't:**
 - Include entire memory in every agent call
 - Ignore context window limits
 - Retrieve memories without relevance ranking
 
-### 4. Multi-Agent Coordination
-✅ **Do:**
+### 4-multi-agent-coordination
+ **Do:**
 - Broadcast significant discoveries to shared memory
 - Implement consensus mechanisms for conflicting data
 - Use message queues for asynchronous updates
 - Version shared knowledge to handle conflicts
 
-❌ **Don't:**
+ **Don't:**
 - Allow race conditions on shared writes
 - Broadcast every minor action (create noise)
 - Trust shared data without validation
 
 ---
 
-## Performance Metrics
+## performance-metrics
 
 Track these metrics to evaluate memory system effectiveness:
 
@@ -708,9 +723,9 @@ class MemoryMetrics(BaseModel):
 
 ---
 
-## Example Usage
+## example-usage
 
-### Full Episode with Memory
+### full-episode-with-memory
 
 ```python
 # Initialize environment with memory
@@ -773,7 +788,7 @@ if done:
 
 ---
 
-## Future Enhancements
+## future-enhancements
 
 - **Active Learning:** Agent can request human labeling for ambiguous patterns
 - **Federated Memory:** Share memory across organizations without revealing raw data
@@ -784,3 +799,20 @@ if done:
 ---
 
 **Next:** See [api.md](./api.md) for multi-model API integration.
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `memory.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

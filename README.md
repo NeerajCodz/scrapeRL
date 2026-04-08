@@ -7,366 +7,217 @@ sdk: docker
 pinned: false
 ---
 
-# ScrapeRL 🌖
+# scraperl
 
-**AI-Powered Web Scraping with Reinforcement Learning** 
+ScrapeRL is an AI-first web-scraping platform that combines reinforcement-learning style episodes, multi-agent planning, dynamic tool/plugin calls, and multi-provider LLM routing. It supports synchronous and streaming scrape APIs, session-based execution, real-time frontend updates, and OpenEnv-compatible inference.
 
-A next-generation web scraping system that uses reinforcement learning and multi-agent coordination to intelligently extract data from websites. Features multiple AI provider support (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA), embeddings, real-time WebSocket updates, and a modern navy blue/cyan themed UI.
+## what-this-project-delivers
 
-## ✨ Key Features
+| area | capability |
+| --- | --- |
+| scraping-runtime | endpoint-driven scraping with `json`, `csv`, `markdown`, and `text` output modes |
+| ai-routing | provider/model routing across OpenAI, Anthropic, Google, Groq, and NVIDIA |
+| agentic-tooling | registry-based runtime tool planning and execution with streamed `tool_call` steps |
+| memory | short-term, working, long-term, and shared memory layers |
+| interface | React + Vite dashboard with live stream progress and session visibility |
+| deployment | local dev, Docker Compose, and Hugging Face Space-compatible Docker setup |
+| evaluation | root `inference.py` following strict `[START]/[STEP]/[END]` OpenEnv output contract |
 
-### 🤖 AI & Machine Learning
-- **Multi-LLM Support** - OpenAI, Anthropic (Claude), Google (Gemini 2.5/2.0/3.0), Groq (Llama 3.3, Mixtral, Gemma2), NVIDIA (DeepSeek, Nemotron, Llama 3.3)
-- **Smart Model Router** - Automatic selection of optimal model based on task type (code, reasoning, extraction, etc.)
-- **Embeddings Service** - Semantic search with OpenAI and Google embeddings, in-memory caching
-- **RL-Powered Scraping** - Reinforcement learning agents that learn optimal extraction strategies
-- **Multi-Agent System** - Coordinated planner, extractor, and navigator agents
+## system-topology
 
-### ⚡ Real-Time Features
-- **WebSocket Support** - Live progress updates during scraping episodes
-- **Session-Based** - Clean slate on each session, no persistent rewards
-- **Real-Time Metrics** - Track rewards, progress, and extraction in real-time
-
-### 🎨 Modern UI/UX
-- **Navy Blue & Cyan Theme** - Beautiful gradient design with glow effects
-- **Fullscreen Layout** - Optimized for productivity
-- **React + TailwindCSS** - Responsive and modern interface
-- **Live Episode Monitoring** - Watch scraper progress in real-time
-
-### 🔧 Developer Experience
-- **FastAPI Backend** - High-performance async Python API
-- **TypeScript Frontend** - Type-safe React application
-- **Docker Ready** - Multi-stage builds with optimized images
-- **Comprehensive Testing** - End-to-end test scripts included
-- **Plugin System** - Extensible architecture with plugin support
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.11+
-- Node.js 20+
-- Docker (optional, but recommended)
-- At least one AI provider API key (OpenAI, Anthropic, Google, Groq, or NVIDIA)
-
-### Docker (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/NeerajCodz/scrapeRL.git
-cd scrapeRL
-
-# Copy and configure environment
-cp .env.example .env
-# Edit .env and add your API keys
-
-# Build and run
-docker-compose up --build
+```mermaid
+flowchart TD
+    A[frontend-dashboard] --> B[fastapi-control-plane]
+    B --> C[episode-runtime]
+    B --> D[scrape-runtime]
+    B --> E[agent-runtime]
+    E --> F[model-router]
+    E --> G[tool-and-plugin-registry]
+    E --> H[memory-manager]
+    D --> G
+    D --> H
+    B --> I[websocket-and-sse-streams]
 ```
 
-Access the app at **http://localhost:7860**
+## repository-layout
 
-### Local Development
+```text
+scrapeRL/
+  backend/
+    app/
+      api/routes/        # FastAPI route modules
+      agents/            # agent planning/runtime logic
+      models/            # model router + provider adapters
+      plugins/           # plugin registry + runtime integrations
+      memory/            # memory layers and manager
+      core/              # env/reward/observation/action foundations
+    requirements.txt
+  frontend/
+    src/                 # React app
+    package.json
+  docs/                  # modular technical documentation
+  inference.py           # OpenEnv-compliant inference runner
+  docker-compose.yml
+  .env.example
+```
 
-**Backend:**
+## quick-start
+
+### docker-compose
+
+```bash
+git clone https://github.com/NeerajCodz/scrapeRL.git
+cd scrapeRL
+cp .env.example .env
+# set api keys in .env
+docker compose up --build
+```
+
+| service | url |
+| --- | --- |
+| frontend | `http://localhost:3000` |
+| backend-api | `http://localhost:8000` |
+| swagger | `http://localhost:8000/swagger` |
+
+### local-development
+
+Backend:
+
 ```bash
 cd backend
 pip install -r requirements.txt
-
-# Copy environment file
-cp ../.env.example ../.env
-# Add your API keys to .env
-
-# Run server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Frontend:**
+Frontend:
+
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 3000
 ```
 
-Frontend will be at **http://localhost:5173**
+## configuration
 
-## 🧪 OpenEnv Hackathon Inference Script
+Root configuration lives in `.env` (template: `.env.example`).
 
-This repository now includes a root-level **`inference.py`** for OpenEnv-style evaluation.
+### provider-and-model-keys
 
-### Required environment variables
-- `API_BASE_URL` (defaulted in script)
-- `MODEL_NAME` (defaulted in script)
-- `HF_TOKEN` (**required**, no default)
+| variable | purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | OpenAI chat + embeddings access |
+| `ANTHROPIC_API_KEY` | Anthropic model access |
+| `GOOGLE_API_KEY` | Google provider and embeddings access |
+| `GEMINI_API_KEY` | alias key used by tests/compose for Gemini |
+| `GROQ_API_KEY` | Groq provider access |
+| `NVIDIA_API_KEY` | NVIDIA provider access |
+| `NVIDIA_BASE_URL` | NVIDIA OpenAI-compatible endpoint base URL |
+| `GEMINI_MODEL_EMBEDDING` | embedding model id for Google embeddings |
+| `HF_TOKEN` | required token for `inference.py` OpenAI client auth |
 
-### Run
-```bash
-python inference.py --task task_001 --benchmark openenv
-```
+### app-runtime
 
-### Output contract
-`inference.py` emits strict structured stdout lines:
+| variable | default |
+| --- | --- |
+| `DEBUG` | `false` |
+| `LOG_LEVEL` | `INFO` |
+| `HOST` | `0.0.0.0` |
+| `PORT` | `8000` |
+| `CORS_ORIGINS` | `["http://localhost:5173","http://localhost:3000"]` |
+| `SESSION_TIMEOUT` | `3600` |
+| `MEMORY_TTL` | `86400` |
+
+### inference-runtime
+
+| variable | default |
+| --- | --- |
+| `API_BASE_URL` | `https://api.openai.com/v1` |
+| `MODEL_NAME` | `gpt-4.1-mini` |
+| `ENV_API_BASE_URL` | `http://localhost:8000/api` |
+| `TASK_NAME` | `task_001` |
+| `BENCHMARK` | `openenv` |
+| `MAX_STEPS` | `12` |
+| `EPISODE_SEED` | `42` |
+| `LLM_TEMPERATURE` | `0.0` |
+| `PROMPT_HTML_LIMIT` | `5000` |
+| `REQUEST_TIMEOUT_SECONDS` | `30` |
+| `USE_OPENENV_SDK` | `true` |
+
+## inferencepy-openenv-contract
+
+The root `inference.py` uses `from openai import OpenAI` for all LLM calls and emits strict structured logs:
+
 ```text
 [START] task=<task_name> env=<benchmark> model=<model_name>
 [STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
 [END] success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
 ```
 
-Notes:
-- OpenAI client (`from openai import OpenAI`) is used as the default LLM caller.
-- The script attempts OpenEnv SDK runtime first and falls back to `/api/episode/reset` + `/api/episode/step`.
+Run:
 
-## 📡 API Endpoints
-
-### Core Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check and system status |
-| POST | `/api/episode/reset` | Create a new scraping episode |
-| POST | `/api/episode/step` | Execute an action in an episode |
-| GET | `/api/episode/state/{episode_id}` | Get current episode state |
-
-### Scrape Streaming Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/scrape/stream` | Run scrape with SSE live events (`init`, `url_start`, `step`, `url_complete`, `complete`) |
-| POST | `/api/scrape/` | Start scrape in background and return `session_id` |
-| GET | `/api/scrape/{session_id}/status` | Session status, reward, steps, plugin info |
-| GET | `/api/scrape/{session_id}/result` | Final formatted output (json/csv/markdown/text) |
-| GET | `/api/scrape/sessions` | List active scrape sessions |
-| DELETE | `/api/scrape/{session_id}` | Cancel running scrape session |
-
-#### Scrape plugin capabilities
-- Query assets can be discovered via `mcp-search` (non-URL asset text -> resolved links).
-- Python sandbox analysis plugins:
-  - `mcp-python-sandbox`
-  - `proc-python`
-  - `proc-pandas`
-  - `proc-numpy`
-  - `proc-bs4`
-- Optional request field: `python_code` (sandboxed, validated code; must assign `result`).
-- Sandbox execution is per-request isolated and cleaned after run.
-
-### AI Provider Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/providers` | List all configured AI providers |
-| GET | `/api/providers/{name}` | Get specific provider details |
-| GET | `/api/providers/models/all` | List all available models |
-| GET | `/api/providers/costs/summary` | Get cost tracking summary |
-
-### WebSocket Endpoints
-| Type | Endpoint | Description |
-|------|----------|-------------|
-| WS | `/ws/episode/{episode_id}` | Real-time episode/session updates |
-
-### Other Endpoints
-- `/api/tasks` - Task management
-- `/api/agents` - Agent configuration
-- `/api/tools` - MCP tools registry
-- `/api/memory` - Memory management
-- `/api/plugins` - Plugin system
-- `/api/settings` - System settings
-
-## 🏗️ Architecture
-
-```
-scrapeRL/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI app entry
-│   │   ├── config.py            # Configuration management
-│   │   ├── api/
-│   │   │   └── routes/          # API endpoints
-│   │   │       ├── episode.py   # Episode management
-│   │   │       ├── providers.py # AI provider APIs
-│   │   │       ├── websocket.py # Real-time updates
-│   │   │       └── ...
-│   │   ├── core/
-│   │   │   ├── env.py           # RL environment
-│   │   │   ├── reward.py        # Reward engine
-│   │   │   ├── embeddings.py   # Embeddings service
-│   │   │   └── ...
-│   │   ├── agents/
-│   │   │   ├── coordinator.py   # Agent orchestration
-│   │   │   ├── planner.py       # Planning agent
-│   │   │   ├── extractor.py     # Extraction agent
-│   │   │   └── navigator.py     # Navigation agent
-│   │   ├── models/
-│   │   │   ├── router.py        # Smart model router
-│   │   │   └── providers/       # AI provider implementations
-│   │   │       ├── openai.py    # OpenAI GPT-4
-│   │   │       ├── anthropic.py # Claude 3.5 Sonnet
-│   │   │       ├── google.py    # Gemini 2.5/2.0/3.0
-│   │   │       ├── groq.py      # Llama 3.3, Mixtral
-│   │   │       └── nvidia.py    # DeepSeek, Nemotron
-│   │   ├── memory/              # Memory system
-│   │   ├── tools/               # MCP tools
-│   │   ├── plugins/             # Sandboxed plugin executors
-│   │   └── types/               # Type definitions
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── components/          # React components
-│   │   ├── hooks/
-│   │   │   ├── useWebSocket.ts  # WebSocket hook
-│   │   │   └── useEpisodeProgress.ts # Episode tracking
-│   │   ├── api/                 # API clients
-│   │   ├── types/               # TypeScript types
-│   │   └── index.css            # Navy/cyan theme
-│   └── package.json
-├── Dockerfile                   # Multi-stage build
-├── docker-compose.yml           # Local development
-├── .env.example                 # Environment template
-└── README.md
+```bash
+python inference.py --task task_001 --benchmark openenv
 ```
 
-## ⚙️ Configuration
+## api-quick-map
 
-Create a `.env` file in the root directory (see `.env.example` for template):
+Use `docs/api-reference.md` for the full endpoint inventory. Core surfaces:
 
-### AI Provider API Keys (Optional - at least one recommended)
-| Variable | Description | Provider |
-|----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key | GPT-4o, GPT-4o-mini, O1 |
-| `ANTHROPIC_API_KEY` | Anthropic API key | Claude 3.5 Sonnet, Haiku, Opus |
-| `GOOGLE_API_KEY` | Google AI API key | Gemini 2.5 Pro/Flash, Gemini 2.0, Gemini 3.0 |
-| `GROQ_API_KEY` | Groq API key | Llama 3.3 70B, Llama 3.2 Vision, Mixtral, Gemma2 |
-| `NVIDIA_API_KEY` | NVIDIA API key | DeepSeek R1/V3.2, Nemotron 70B, Llama 3.3 70B |
+| surface | endpoints |
+| --- | --- |
+| health | `/api/health`, `/api/ready`, `/api/ping` |
+| episode | `/api/episode/reset`, `/api/episode/step`, `/api/episode/state/{episode_id}` |
+| scrape | `/api/scrape/stream`, `/api/scrape/{session_id}/status`, `/api/scrape/{session_id}/result` |
+| agents-tools-memory | `/api/agents/*`, `/api/tools/*`, `/api/plugins/*`, `/api/memory/*` |
+| realtime | `/ws/episode/{episode_id}` |
 
-### HuggingFace (Optional)
-| Variable | Description |
-|----------|-------------|
-| `HF_TOKEN` | HuggingFace token for model access |
+## documentation-map
 
-### App Settings
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DEBUG` | `false` | Enable debug mode |
-| `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARN, ERROR) |
-| `HOST` | `0.0.0.0` | Server host |
-| `PORT` | `8000` | Server port |
+| document | purpose |
+| --- | --- |
+| `docs/overview.md` | platform overview and navigation |
+| `docs/api-reference.md` | authoritative HTTP and WebSocket reference |
+| `docs/architecture.md` | system architecture and runtime planes |
+| `docs/openenv.md` | OpenEnv environment contract |
+| `docs/tool-calls.md` | streamed tool-call event patterns |
+| `docs/plugins.md` | plugin registry and dynamic tool model |
+| `docs/memory.md` | memory design and operations |
+| `docs/readme.md` | docs index |
 
-### CORS Settings
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
+## testing-and-validation
 
-### Session & Memory
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SESSION_TIMEOUT` | `3600` | Session timeout in seconds |
-| `MEMORY_TTL` | `86400` | Memory TTL in seconds |
-
-## 🧪 Testing
-
-Run the end-to-end test script:
+Backend:
 
 ```bash
 cd backend
-python test_scraper.py
+pytest
 ```
 
-This will:
-1. Create a scraping episode
-2. Execute navigation and extraction actions
-3. Track rewards and progress
-4. Verify WebSocket connectivity
-5. Display final results
-
-Expected output:
-```
-✓ Episode created: <uuid>
-✓ Action executed successfully
-  Reward: 0.65
-  Progress: 0.0%
-✓ Final state retrieved
-  Steps: 3
-  Total reward: 2.26
-```
-
-## 🚀 Deployment
-
-### HuggingFace Spaces
-
-This app is configured for HuggingFace Spaces with Docker SDK:
-- Port: 7860
-- Health check: `/api/health`
-- Auto-builds on push
-- Multi-stage build for optimized image size
-
-### Manual Docker
+Frontend:
 
 ```bash
-# Run frontend + backend together
-docker compose up --build
+cd frontend
+npm run test
 ```
 
-After startup:
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:8000/api`
+## deployment-notes
 
-### Environment Variables in Production
+| mode | notes |
+| --- | --- |
+| docker-compose | preferred local full-stack run |
+| hugging-face-space | root `README.md` front matter + Docker SDK config is compatible |
+| direct-backend | run `uvicorn app.main:app` with `.env` configured |
 
-Set all required environment variables in your deployment platform:
-- HuggingFace Spaces: Settings → Repository secrets
-- Docker: Use `--env-file` or environment section in docker-compose
-- Kubernetes: ConfigMaps and Secrets
+## troubleshooting
 
-## 🎯 Usage Examples
+| symptom | likely-cause | check |
+| --- | --- | --- |
+| provider not available | missing api key | verify `.env` provider key |
+| streaming has no step events | scrape runtime failed early | inspect `/api/scrape/{session_id}/status` |
+| inference exits with failure | missing `HF_TOKEN` or endpoint mismatch | verify `HF_TOKEN`, `API_BASE_URL`, `MODEL_NAME` |
+| no frontend data | backend not reachable from frontend | check `VITE_API_PROXY_TARGET` / backend health |
 
-### Example 1: Simple Scraping Task
+## license
 
-```bash
-curl -X POST http://localhost:8000/api/episode/reset \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task_id": "scrape-quotes",
-    "config": {
-      "start_url": "http://quotes.toscrape.com",
-      "target_fields": {
-        "quotes": {"text": "quote text", "author": "author name"}
-      },
-      "max_steps": 20
-    }
-  }'
-```
+MIT.
 
-### Example 2: WebSocket Connection
-
-```javascript
-// Frontend JavaScript
-const ws = new WebSocket('ws://localhost:8000/ws/episode/<episode_id>');
-
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  
-  if (message.type === 'progress') {
-    console.log(`Step ${message.step}: ${message.action_type}`);
-    console.log(`Reward: ${message.reward}, Progress: ${message.progress}%`);
-  }
-  
-  if (message.type === 'completion') {
-    console.log(`Episode completed! Success: ${message.success}`);
-    console.log(`Total reward: ${message.total_reward}`);
-  }
-};
-```
-
-## 🤝 Contributing
-
-Contributions welcome! This project follows conventional commit messages:
-- `feat:` - New features
-- `fix:` - Bug fixes
-- `chore:` - Maintenance tasks
-- `docs:` - Documentation updates
-- `test:` - Test additions/updates
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 🙏 Acknowledgments
-
-- Built with FastAPI, React, TailwindCSS
-- Powered by OpenAI, Anthropic, Google, Groq, and NVIDIA AI models
-- Inspired by reinforcement learning research in web automation

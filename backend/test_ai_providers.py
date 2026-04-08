@@ -287,7 +287,7 @@ async def run_tests():
     report_md = reporter.generate_markdown()
     
     # Save report
-    report_path = Path("docs/test/ai_provider_test_report.md")
+    report_path = Path("docs/test/ai-provider-test-report.md")
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report_md, encoding="utf-8")
     

@@ -1,4 +1,4 @@
-# WebScraper-OpenEnv: Software Design Document
+# webscraper-openenv-software-design-document
 
 **Project:** WebScraper-OpenEnv  
 **Version:** 1.0.0  
@@ -8,7 +8,7 @@
 
 ---
 
-## Table of Contents
+## table-of-contents
 
 1. [Project Overview](#1-project-overview)
 2. [Real-World Motivation](#2-real-world-motivation)
@@ -43,7 +43,7 @@
 
 ---
 
-## 1. Project Overview
+## 1-project-overview
 
 **WebScraper-OpenEnv** is a reinforcement learning environment that challenges AI agents to perform structured **web data extraction** — a task humans and automated pipelines carry out every day for market research, competitive intelligence, lead generation, price monitoring, and data journalism.
 
@@ -57,7 +57,7 @@ This environment is designed to:
 
 ---
 
-## 2. Real-World Motivation
+## 2-real-world-motivation
 
 Web scraping is a core capability required across:
 
@@ -79,7 +79,7 @@ No existing OpenEnv environment covers this domain. **WebScraper-OpenEnv fills t
 
 ---
 
-## 3. System Architecture
+## 3-system-architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -121,9 +121,9 @@ No existing OpenEnv environment covers this domain. **WebScraper-OpenEnv fills t
 
 ---
 
-## 4. OpenEnv Specification
+## 4-openenv-specification
 
-### 4.1 Observation Model
+### 4-1-observation-model
 
 An `Observation` is returned after every `reset()` and `step()` call.
 
@@ -149,7 +149,7 @@ class Observation(BaseModel):
 - `extracted_so_far` gives the agent a running view of what it has already collected — critical for multi-page tasks.
 - `hints` are populated for easy/medium tasks and empty for hard, creating a natural difficulty gradient.
 
-### 4.2 Action Model
+### 4-2-action-model
 
 An `Action` is submitted by the agent in each `step()` call.
 
@@ -211,7 +211,7 @@ class Action(BaseModel):
 - `RESOLVE_CONFLICT` is scored by the grader: if the agent picks the more authoritative source it earns a bonus; if it picks the wrong one it earns a penalty.
 - `SUBMIT` is the terminal action that triggers the grader.
 
-### 4.3 Reward Model
+### 4-3-reward-model
 
 ```python
 class Reward(BaseModel):
@@ -221,7 +221,7 @@ class Reward(BaseModel):
     message: str           # Human-readable explanation
 ```
 
-### 4.4 Episode Lifecycle
+### 4-4-episode-lifecycle
 
 ```
 reset(task_id, seed?) 
@@ -243,7 +243,7 @@ An episode also ends automatically if:
 
 ---
 
-## 5. Environment State Machine
+## 5-environment-state-machine
 
 ```
          reset()
@@ -286,9 +286,9 @@ An episode also ends automatically if:
 
 ---
 
-## 6. Task Definitions
+## 6-task-definitions
 
-### Task 1: Static Page Field Extraction (Easy)
+### task-1-static-page-field-extraction-easy
 
 **ID:** `task_easy`  
 **Max Steps:** 10  
@@ -325,7 +325,7 @@ product_name, price, sku, star_rating, review_count
 
 ---
 
-### Task 2: Paginated Catalog Scraping (Medium)
+### task-2-paginated-catalog-scraping-medium
 
 **ID:** `task_medium`  
 **Max Steps:** 25  
@@ -356,7 +356,7 @@ cheapest_item_3_name, cheapest_item_3_price
 
 ---
 
-### Task 3: Deep Research with Search & Fact Verification (Hard)
+### task-3-deep-research-with-search-and-fact-verification-hard
 
 **ID:** `task_hard`  
 **Max Steps:** 60  
@@ -529,7 +529,7 @@ def score_task_hard(submission, ground_truth, episode_state):
 
 ---
 
-## 7. Grader Design
+## 7-grader-design
 
 Each task has a dedicated `Grader` class implementing the following interface:
 
@@ -569,7 +569,7 @@ class GraderResult(BaseModel):
 
 ---
 
-## 8. Reward Function Design
+## 8-reward-function-design
 
 The reward function provides **dense signal across the full trajectory**, not just a terminal reward.
 
@@ -577,7 +577,7 @@ The reward function provides **dense signal across the full trajectory**, not ju
 R_total = R_extraction + R_efficiency + R_navigation + R_terminal - R_penalty
 ```
 
-### Per-Step Rewards
+### per-step-rewards
 
 | Event | Reward | Rationale |
 |---|---|---|
@@ -606,7 +606,7 @@ R_total = R_extraction + R_efficiency + R_navigation + R_terminal - R_penalty
 | `FETCH_URL` → blocked (proxy active, retry succeeds) | +0.05 | Rewards using proxy correctly |
 | Budget exhaustion (no SUBMIT) | -0.20 | Penalizes running out of budget |
 
-### Terminal Reward (on SUBMIT)
+### terminal-reward-on-submit
 
 ```
 R_terminal = grader_score × 2.0
@@ -614,7 +614,7 @@ R_terminal = grader_score × 2.0
 
 This scales the terminal reward to dominate the trajectory reward, ensuring the agent optimizes for final output quality.
 
-### Reward Range
+### reward-range
 
 - Minimum possible (all wrong, loops, budget exhausted): approximately -2.5
 - Maximum possible (all correct, efficient path): approximately +2.5
@@ -622,13 +622,13 @@ This scales the terminal reward to dominate the trajectory reward, ensuring the 
 
 ---
 
-## 9. Network Layer — VPN & Proxy
+## 9-network-layer-vpn-and-proxy
 
 The network layer is an optional but impactful system component. When active, all `NAVIGATE`, `FETCH_URL`, and `SEARCH_ENGINE` actions route outbound requests through the configured proxy or VPN. In simulation mode (default), the layer gates which simulated domains respond with 200 vs. 429 — giving agents a realistic incentive to configure networking.
 
 ---
 
-### 9.1 Architecture
+### 9-1-architecture
 
 ```
 Agent Action (FETCH_URL / NAVIGATE / SEARCH_ENGINE)
@@ -657,7 +657,7 @@ Mode is set in `Settings → Network → Mode`. `live` mode is off by default an
 
 ---
 
-### 9.2 Proxy Configuration
+### 9-2-proxy-configuration
 
 Proxies can be configured three ways: user-supplied credentials, a pre-tested public proxy pool, or disabled.
 
@@ -711,7 +711,7 @@ The environment ships with a static list of ~50 pre-validated public proxies for
 
 ---
 
-### 9.3 VPN Configuration
+### 9-3-vpn-configuration
 
 VPN integration supports **WireGuard** and **OpenVPN** protocols. Users paste their config file content or fill individual fields in the Settings UI.
 
@@ -756,7 +756,7 @@ In **simulation mode**, VPN is purely logical — activating it marks the sessio
 
 ---
 
-### 9.4 Public Pool (Quick Start)
+### 9-4-public-pool-quick-start
 
 For users who don't have their own proxy or VPN, the Settings UI offers a **Public Pool** tab that requires zero configuration:
 
@@ -771,7 +771,7 @@ Selecting "Simulation Bypass" is the recommended option for evaluation runs — 
 
 ---
 
-### 9.5 Settings Persistence
+### 9-5-settings-persistence
 
 All network settings are stored server-side in a lightweight JSON config file (`config/network_settings.json`). Passwords and VPN configs are encrypted using **Fernet symmetric encryption** with a key derived from a server-side secret (`SETTINGS_SECRET` env var).
 
@@ -791,11 +791,11 @@ The Settings UI reads from `GET /api/settings` and writes via `PUT /api/settings
 
 ---
 
-## 10. API Endpoint Specification
+## 10-api-endpoint-specification
 
 All endpoints accept and return `application/json`.
 
-### `POST /api/reset`
+### post-api-reset
 
 Initialize or restart an episode.
 
@@ -807,7 +807,7 @@ Initialize or restart an episode.
 
 ---
 
-### `POST /api/step`
+### post-api-step
 
 Advance the episode by one action.
 
@@ -834,19 +834,19 @@ Advance the episode by one action.
 
 ---
 
-### `GET /api/state`
+### get-api-state
 
 Return current episode state. **Query param:** `episode_id=uuid-...`
 
 ---
 
-### `GET /api/tasks`
+### get-api-tasks
 
 Return all task definitions and their action schemas.
 
 ---
 
-### `POST /api/grader`
+### post-api-grader
 
 Score a completed episode.
 
@@ -861,7 +861,7 @@ Score a completed episode.
 
 ---
 
-### `POST /api/baseline`
+### post-api-baseline
 
 Trigger the built-in baseline inference script against all 3 tasks and return scores.
 
@@ -881,7 +881,7 @@ Trigger the built-in baseline inference script against all 3 tasks and return sc
 
 ---
 
-### `GET /api/settings`
+### get-api-settings
 
 Return current network settings. **Passwords are never returned** — password fields are always `null` in the response.
 
@@ -889,7 +889,7 @@ Return current network settings. **Passwords are never returned** — password f
 
 ---
 
-### `PUT /api/settings`
+### put-api-settings
 
 Update network settings (full or partial).
 
@@ -911,7 +911,7 @@ Update network settings (full or partial).
 
 ---
 
-### `POST /api/settings/proxy/test`
+### post-api-settings-proxy-test
 
 Test the current proxy configuration by making a request to `test_url`.
 
@@ -927,7 +927,7 @@ Test the current proxy configuration by making a request to `test_url`.
 
 ---
 
-### `POST /api/settings/vpn/connect`
+### post-api-settings-vpn-connect
 
 Activate the configured VPN tunnel (live mode only; simulation mode returns immediate success).
 
@@ -944,13 +944,13 @@ Activate the configured VPN tunnel (live mode only; simulation mode returns imme
 
 ---
 
-### `POST /api/settings/vpn/disconnect`
+### post-api-settings-vpn-disconnect
 
 Tear down the active VPN tunnel.
 
 ---
 
-### `GET /api/settings/network/status`
+### get-api-settings-network-status
 
 Returns current active network configuration — what proxy/VPN is live right now.
 
@@ -969,7 +969,7 @@ Returns current active network configuration — what proxy/VPN is live right no
 
 ---
 
-### `GET /api/settings/public-pool`
+### get-api-settings-public-pool
 
 Returns the list of available public proxy/VPN pool options with current availability status.
 
@@ -987,7 +987,7 @@ Returns the list of available public proxy/VPN pool options with current availab
 
 ---
 
-## 11. Data Models (Pydantic Schemas)
+## 11-data-models-pydantic-schemas
 
 ```python
 # env/models.py
@@ -1093,11 +1093,11 @@ class NetworkStatus(BaseModel):
 
 ---
 
-## 12. Simulated Web Environment
+## 12-simulated-web-environment
 
 The `SimulatedWebServer` class generates HTML pages on-the-fly using Jinja2 templates seeded by a deterministic RNG.
 
-### Page Generator Pipeline
+### page-generator-pipeline
 
 ```
 seed + task_id + url
@@ -1121,19 +1121,19 @@ seed + task_id + url
   HTML string (max 8,000 chars)
 ```
 
-### Noise Types by Task
+### noise-types-by-task
 
 | Noise Type | Easy | Medium | Hard |
 |---|---|---|---|
-| Decoy fields with similar labels | ❌ | ✅ | ✅ |
-| Inconsistent price formatting | ❌ | ✅ | ✅ |
-| Broken/unclosed HTML tags | ❌ | ❌ | ✅ |
-| Interstitial blocking page | ❌ | ❌ | ✅ |
-| Contradictory values across pages | ❌ | ❌ | ✅ |
-| JavaScript-only content (noscript fallback) | ❌ | ❌ | ✅ |
-| Paginated content (multi-page) | ❌ | ✅ | ✅ |
+| Decoy fields with similar labels |  |  |  |
+| Inconsistent price formatting |  |  |  |
+| Broken/unclosed HTML tags |  |  |  |
+| Interstitial blocking page |  |  |  |
+| Contradictory values across pages |  |  |  |
+| JavaScript-only content (noscript fallback) |  |  |  |
+| Paginated content (multi-page) |  |  |  |
 
-### URL Scheme
+### url-scheme
 
 Simulated URLs follow the pattern `sim://<domain>/<path>`. The environment maps these to page generators internally — no DNS or network calls occur.
 
@@ -1158,11 +1158,11 @@ sim://linkedin-sim.example.com/company/acme    → LinkedIn-style profile (task_
 
 ---
 
-## 13. Baseline Inference Script
+## 13-baseline-inference-script
 
 `scripts/baseline.py` uses the OpenAI API to run a ReAct-style loop against the environment.
 
-### Agent Strategy
+### agent-strategy
 
 ```
 System Prompt:
@@ -1181,7 +1181,7 @@ Loop:
   3. Report all 3 task scores
 ```
 
-### Configuration
+### configuration
 
 Read from environment variables:
 ```
@@ -1191,14 +1191,14 @@ BASELINE_SEED=42
 BASELINE_MAX_RETRIES=3
 ```
 
-### Reproducibility
+### reproducibility
 
 - Fixed seed=42 for all tasks
 - Deterministic page generation
 - Temperature=0 for LLM calls
 - Results logged to `results/baseline_<timestamp>.json`
 
-### Expected Baseline Scores (gpt-4o-mini)
+### expected-baseline-scores-gpt-4o-mini
 
 | Task | Expected Score | Notes |
 |---|---|---|
@@ -1209,11 +1209,11 @@ BASELINE_MAX_RETRIES=3
 
 ---
 
-## 14. Project Structure
+## 14-project-structure
 
 ```
 webscraper-openenv/
-├── README.md
+├── readme.md
 ├── openenv.yaml
 ├── Dockerfile
 ├── requirements.txt
@@ -1309,11 +1309,11 @@ webscraper-openenv/
 
 ---
 
-## 15. Dockerfile & Deployment
+## 15-dockerfile-and-deployment
 
 Everything ships in a **single Docker container**. The build is a two-stage process: Stage 1 compiles the Vite frontend into static files; Stage 2 installs the Python backend and copies the compiled frontend in. FastAPI then serves both the API and the frontend from port 7860.
 
-### Request Routing (single port)
+### request-routing-single-port
 
 ```
 Port 7860
@@ -1351,7 +1351,7 @@ The Vite frontend calls `fetch("/api/...")` — no base URL configuration needed
 
 ---
 
-### Dockerfile (multi-stage)
+### dockerfile-multi-stage
 
 ```dockerfile
 # ── Stage 1: Build Vite frontend ──────────────────────────────────────
@@ -1425,7 +1425,7 @@ docker run -p 7860:7860 \
 
 ---
 
-### requirements.txt
+### requirements-txt
 
 ```
 fastapi>=0.110.0
@@ -1463,7 +1463,7 @@ In production (inside Docker), no proxy is needed — both frontend and backend 
 
 ---
 
-### requirements.txt
+### requirements-txt
 
 ```
 fastapi>=0.110.0
@@ -1478,7 +1478,7 @@ aiofiles>=23.2.1   # Required for FastAPI StaticFiles
 
 ---
 
-### Local Development Workflow
+### local-development-workflow
 
 ```bash
 # Option A: Full Docker (production-identical)
@@ -1495,7 +1495,7 @@ cd frontend && npm run dev
 # Visit: http://localhost:5173 (proxies API to :8000)
 ```
 
-### Build & Smoke Test
+### build-and-smoke-test
 
 ```bash
 docker build -t webscraper-openenv .
@@ -1512,7 +1512,7 @@ curl -X POST http://localhost:7860/api/reset \
      -d '{"task_id": "task_easy", "seed": 42}'
 ```
 
-### Hugging Face Spaces Deployment
+### hugging-face-spaces-deployment
 
 The Space will be tagged with `openenv` and configured as:
 - **SDK:** Docker
@@ -1522,7 +1522,7 @@ The Space will be tagged with `openenv` and configured as:
 
 ---
 
-## 15. openenv.yaml
+## 15-openenv-yaml
 
 ```yaml
 name: webscraper-openenv
@@ -1596,9 +1596,9 @@ episode_termination:
 
 ---
 
-## 16. Testing Strategy
+## 16-testing-strategy
 
-### Unit Tests
+### unit-tests
 
 **`test_graders.py`**
 - Test each grader with perfect submission → expect score = 1.0
@@ -1618,7 +1618,7 @@ episode_termination:
 - Budget exhaustion terminates episode
 - Same seed produces identical HTML
 
-### Integration Tests
+### integration-tests
 
 **`test_api.py`**
 - Full episode run via HTTP for each task
@@ -1626,7 +1626,7 @@ episode_termination:
 - `/grader` returns score in [0.0, 1.0]
 - Invalid episode_id returns 404
 
-### Validation
+### validation
 
 ```bash
 openenv validate .
@@ -1636,7 +1636,7 @@ Expected: All checks pass, spec compliance confirmed.
 
 ---
 
-## 17. Known Limitations & Future Work
+## 17-known-limitations-and-future-work
 
 | Limitation | Impact | Future Fix |
 |---|---|---|
@@ -1652,3 +1652,18 @@ Expected: All checks pass, spec compliance confirmed.
 *End of Software Design Document*
 
 *WebScraper-OpenEnv — OpenEnv Round 1 Submission*
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

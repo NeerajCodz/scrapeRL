@@ -1,6 +1,6 @@
-# 🎯 Advanced Reward Function
+# advanced-reward-function
 
-## Table of Contents
+## table-of-contents
 1. [Overview](#overview)
 2. [Reward Components](#reward-components)
 3. [Planning Quality](#planning-quality)
@@ -15,18 +15,18 @@
 
 ---
 
-## Overview
+## overview
 
 The **Advanced Reward Function** provides dense, interpretable signals that guide the agent toward intelligent, efficient, and generalizable web scraping strategies.
 
-### Design Principles
+### design-principles
 
 1. **Dense Rewards:** Provide feedback at every step, not just terminal states
 2. **Interpretable:** Each component has a clear purpose agents (and humans) can understand
 3. **Balanced:** Prevent reward hacking by balancing conflicting objectives
 4. **Adaptive:** Adjust weights based on task difficulty and agent progress
 
-### Basic vs Advanced
+### basic-vs-advanced
 
 **Basic Reward (existing):**
 ```python
@@ -49,9 +49,9 @@ reward = (
 
 ---
 
-## Reward Components
+## reward-components
 
-### 1. Task Completion (w1 = 0.40)
+### 1-task-completion-w1-0-40
 
 **Purpose:** Measure how much of the task is complete.
 
@@ -95,7 +95,7 @@ task_completion = 2/3 = 0.67
 
 ---
 
-### 2. Efficiency (w2 = 0.15)
+### 2-efficiency-w2-0-15
 
 **Purpose:** Reward completing tasks quickly with fewer actions.
 
@@ -126,9 +126,9 @@ efficiency = 1.0 - (18/20) = 0.10  # Inefficient
 
 ---
 
-## Planning Quality
+## planning-quality
 
-### 3. Planning Quality Score (w3 = 0.10)
+### 3-planning-quality-score-w3-0-10
 
 **Purpose:** Reward agents that plan before acting.
 
@@ -204,9 +204,9 @@ planning_score = 0.0 (no notes) + 0.4*0.0 (incoherent) + 0.3*0.33 (backtracking)
 
 ---
 
-## Recovery Ability
+## recovery-ability
 
-### 4. Recovery Ability Score (w4 = 0.08)
+### 4-recovery-ability-score-w4-0-08
 
 **Purpose:** Reward agents that recover from failures.
 
@@ -278,9 +278,9 @@ recovery_score = 0/2 = 0.0  # 2 failures, 0 recoveries
 
 ---
 
-## Exploration Bonus
+## exploration-bonus
 
-### 5. Exploration Bonus (w5 = 0.05)
+### 5-exploration-bonus-w5-0-05
 
 **Purpose:** Encourage discovering new pages and patterns early in training.
 
@@ -314,9 +314,9 @@ exploration_bonus = 3 * 0.1 * exp(-0.01*500) = 0.3 * 0.007 = 0.002  # Minimal bo
 
 ---
 
-## Redundancy Penalty
+## redundancy-penalty
 
-### 6. Redundancy Penalty (penalty, not bonus)
+### 6-redundancy-penalty-penalty-not-bonus
 
 **Purpose:** Penalize visiting the same page repeatedly without progress.
 
@@ -345,9 +345,9 @@ redundancy_penalty = 0.05 * (3-1)**1.5 = 0.05 * 2.83 = 0.14
 
 ---
 
-## Generalization Score
+## generalization-score
 
-### 7. Generalization Score (w8 = 0.07)
+### 7-generalization-score-w8-0-07
 
 **Purpose:** Reward strategies that work across different page layouts.
 
@@ -377,9 +377,9 @@ def generalization_score(
 
 ---
 
-## Tool Usage Efficiency
+## tool-usage-efficiency
 
-### 8. Tool Usage (w6 = 0.05)
+### 8-tool-usage-w6-0-05
 
 **Purpose:** Reward using the right tools at the right time.
 
@@ -411,9 +411,9 @@ def tool_usage_score(actions: List[Action]) -> float:
 
 ---
 
-## Memory Utilization
+## memory-utilization
 
-### 9. Memory Usage (w7 = 0.05)
+### 9-memory-usage-w7-0-05
 
 **Purpose:** Reward effective use of memory system.
 
@@ -440,9 +440,9 @@ def memory_usage_score(episode: Episode) -> float:
 
 ---
 
-## Final Reward Formula
+## final-reward-formula
 
-### Complete Formula
+### complete-formula
 
 ```python
 def calculate_reward(episode: Episode, config: RewardConfig) -> Reward:
@@ -505,7 +505,7 @@ def calculate_reward(episode: Episode, config: RewardConfig) -> Reward:
     )
 ```
 
-### Default Weights
+### default-weights
 
 ```python
 class RewardWeights(BaseModel):
@@ -522,9 +522,9 @@ class RewardWeights(BaseModel):
 
 ---
 
-## Configuration
+## configuration
 
-### Settings
+### settings
 
 ```typescript
 interface RewardConfig {
@@ -549,7 +549,7 @@ interface RewardConfig {
 }
 ```
 
-### UI Component
+### ui-component
 
 ```jsx
 <RewardSettings>
@@ -588,7 +588,7 @@ interface RewardConfig {
 
 ---
 
-## Reward Visualization
+## reward-visualization
 
 ```jsx
 <RewardBreakdown>
@@ -625,13 +625,37 @@ Redundancy Penalty: ░░░░░░░░░░░░░░░░░░░░
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Explanation:
-✓ Excellent task completion (85% of fields extracted correctly)
-✓ Good efficiency (completed in 8/20 steps)
-✓ Strong recovery ability (recovered from 2/2 failures)
-⚠ Moderate redundancy (visited homepage 3 times)
+ Excellent task completion (85% of fields extracted correctly)
+ Good efficiency (completed in 8/20 steps)
+ Strong recovery ability (recovered from 2/2 failures)
+ Moderate redundancy (visited homepage 3 times)
 → Overall: Strong performance!
 ```
 
 ---
 
 **Next:** See [html-processing.md](./html-processing.md) for advanced HTML handling.
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `rewards.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

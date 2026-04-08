@@ -1,12 +1,12 @@
-# OpenEnv Specification (Enhanced)
+# openenv-specification-enhanced
 
-## Overview
+## overview
 
 This document defines the OpenEnv contract for WebScraper-OpenEnv with advanced memory, MCP tooling, multi-model routing, and long-page batch handling.
 
-## Core Interfaces
+## core-interfaces
 
-### Observation
+### observation
 
 ```python
 class Observation(BaseModel):
@@ -31,7 +31,7 @@ class Observation(BaseModel):
     page_chunks: list[dict] | None
 ```
 
-### Action
+### action
 
 ```python
 class Action(BaseModel):
@@ -67,7 +67,7 @@ class Action(BaseModel):
     memory_query: str | None = None
 ```
 
-### Action Types
+### action-types
 
 - `EXTRACT_FIELD`
 - `NAVIGATE`
@@ -86,7 +86,7 @@ class Action(BaseModel):
 - `SUMMARIZE_MEMORY`
 - `PRUNE_MEMORY`
 
-### Reward
+### reward
 
 ```python
 class Reward(BaseModel):
@@ -96,7 +96,7 @@ class Reward(BaseModel):
     message: str
 ```
 
-## Episode Lifecycle
+## episode-lifecycle
 
 ```text
 reset(task_id, seed?)
@@ -116,7 +116,7 @@ Terminal conditions:
 - max page limit reached
 - fatal policy error
 
-## State Machine
+## state-machine
 
 ```text
 RESET -> RUNNING -> TERMINAL
@@ -124,28 +124,28 @@ RESET -> RUNNING -> TERMINAL
             +-- NAVIGATE / EXTRACT / SEARCH / VERIFY / MCP / MEMORY
 ```
 
-## Task Profiles
+## task-profiles
 
-### Easy
+### easy
 
 - single-page extraction
 - low noise
 - hints enabled
 
-### Medium
+### medium
 
 - pagination
 - moderate noise
 - partial hints
 
-### Hard
+### hard
 
 - multi-hop search
 - conflicting sources
 - verification required
 - no hints
 
-## Long Page Handling
+## long-page-handling
 
 When HTML exceeds token/size thresholds:
 
@@ -155,7 +155,7 @@ When HTML exceeds token/size thresholds:
 4. Merge + dedupe + confidence rank
 5. Optional diff-based incremental update
 
-## MCP Integration Contract
+## mcp-integration-contract
 
 On each step, environment may expose:
 
@@ -169,7 +169,7 @@ Tool calls are evaluated for:
 - efficiency
 - safety constraints
 
-## Search Engine Contract
+## search-engine-contract
 
 Search action supports provider routing:
 
@@ -182,7 +182,7 @@ Search action supports provider routing:
 
 Environment stores query + result metadata for observability.
 
-## Memory Contract
+## memory-contract
 
 Layers:
 
@@ -198,23 +198,42 @@ Mandatory metadata for write operations:
 - `confidence`
 - `source`
 
-## API Surface
+## api-surface
 
-- `POST /api/reset`
-- `POST /api/step`
-- `GET /api/state/{episode_id}`
-- `GET /api/tasks`
-- `GET /api/reward/{episode_id}`
-- `GET /api/tool-registry`
-- `POST /api/tool-test`
+| contract-area | endpoint |
+| --- | --- |
+| environment lifecycle | `/api/episode/reset`, `/api/episode/step`, `/api/episode/state/{episode_id}` |
+| task catalog | `/api/tasks/`, `/api/tasks/{task_id}`, `/api/tasks/types/` |
+| memory and tools | `/api/memory/*`, `/api/tools/registry`, `/api/plugins/tools` |
+| scrape runtime | `/api/scrape/stream`, `/api/scrape/{session_id}/status`, `/api/scrape/{session_id}/result` |
+| realtime updates | `/ws/episode/{episode_id}` |
 
-## Determinism
+For the complete endpoint inventory, use `api-reference.md`.
+
+## determinism
 
 Given `task_id + seed + config`, environment should be reproducible for grading and benchmarking.
 
-## Safety and Guardrails
+## safety-and-guardrails
 
 - enforce max steps and request budgets
 - enforce MCP tool allowlist/denylist
 - prevent secret leakage from tool outputs
 - sanitize logs and traces
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `openenv.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

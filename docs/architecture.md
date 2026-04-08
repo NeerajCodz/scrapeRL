@@ -1,10 +1,10 @@
-# System Architecture
+# system-architecture
 
-## Overview
+## overview
 
 WebScraper-OpenEnv is designed as a modular, dashboard-first RL environment with extensible APIs, MCP tools, and multi-model routing.
 
-## High-Level Topology
+## high-level-topology
 
 ```text
 Frontend Dashboard (React/Vite)
@@ -40,9 +40,9 @@ FastAPI Control Plane
                - traces/logs/metrics/cost dashboard
 ```
 
-## Core Subsystems
+## core-subsystems
 
-### 1. Control Plane
+### 1-control-plane
 
 Responsibilities:
 
@@ -51,7 +51,7 @@ Responsibilities:
 - action authorization and policy checks
 - deterministic episode management
 
-### 2. Agent Runtime
+### 2-agent-runtime
 
 Responsibilities:
 
@@ -60,7 +60,7 @@ Responsibilities:
 - fallback handling
 - action explainability
 
-### 3. Tooling Plane (MCP)
+### 3-tooling-plane-mcp
 
 Responsibilities:
 
@@ -69,7 +69,7 @@ Responsibilities:
 - lazy installation
 - composition workflows
 
-### 3.5 Site Template Layer
+### 3-5-site-template-layer
 
 Responsibilities:
 
@@ -78,7 +78,7 @@ Responsibilities:
 - provide reusable navigation goals/fields for planner and navigator agents
 - expose template catalog through `/api/sites*` endpoints
 
-### 4. Data Plane
+### 4-data-plane
 
 Responsibilities:
 
@@ -87,7 +87,7 @@ Responsibilities:
 - verification and reconciliation
 - output persistence
 
-### 5. Analytics Plane
+### 5-analytics-plane
 
 Responsibilities:
 
@@ -96,7 +96,7 @@ Responsibilities:
 - tool usage telemetry
 - memory quality analytics
 
-## Processing Pipeline
+## processing-pipeline
 
 1. `reset(task_id, seed)`
 2. observation emitted
@@ -106,21 +106,21 @@ Responsibilities:
 6. done check
 7. repeat until terminal
 
-## Batch and Parallel Design
+## batch-and-parallel-design
 
-### Batch
+### batch
 
 - large HTML split into semantic chunks
 - chunk extraction batched with bounded size
 - merge + dedupe + confidence rank
 
-### Parallel
+### parallel
 
 - independent chunk tasks run concurrently
 - search and verification can run in parallel branches
 - configurable worker limits and queue priorities
 
-## Queue and Scheduler
+## queue-and-scheduler
 
 Task queue supports:
 
@@ -129,14 +129,14 @@ Task queue supports:
 - retry policy with backoff
 - dead-letter queue for repeated failures
 
-## Storage Architecture
+## storage-architecture
 
 - Episode state: in-memory + optional persistence
 - Long-term memory: vector DB + metadata store
 - Logs/metrics: append-only time-series-friendly sink
 - Exports: JSON/CSV trace packs
 
-## Backend Folder Notes (Template System)
+## backend-folder-notes-template-system
 
 ```text
 backend/app/sites/
@@ -145,21 +145,21 @@ backend/app/sites/
   - registry.py    # list/get/match/serialize helpers
 ```
 
-## Reliability
+## reliability
 
 - per-tool timeout and retry
 - per-step safety budget
 - circuit breaker for failing providers
 - deterministic fallback chains
 
-## Security
+## security
 
 - API key vaulting via env/config secrets
 - MCP allowlist
 - output sanitization
 - redaction of sensitive tokens in logs
 
-## Deployment
+## deployment
 
 Single-container baseline:
 
@@ -173,14 +173,43 @@ Scale-out profile:
 - queue-backed distributed execution
 - central observability backend
 
-## Compatibility Goals
+## compatibility-goals
 
 - local dev mode with minimal dependencies
 - cloud mode with managed infra
 - optional self-hosted LLM endpoints
 
-## Future Architecture Extensions
+## future-architecture-extensions
 
 - distributed multi-agent graph execution
 - adaptive autoscaling by queue pressure
 - global memory federation across projects
+
+## api-reference-alignment
+
+| architecture-plane | primary-endpoints |
+| --- | --- |
+| control-plane | `/api/health`, `/api/ready`, `/api/settings`, `/api/tasks` |
+| episode-runtime | `/api/episode/reset`, `/api/episode/step`, `/api/episode/state/{episode_id}` |
+| agent-runtime | `/api/agents/*`, `/api/providers/*` |
+| tooling-memory | `/api/tools/*`, `/api/plugins/*`, `/api/memory/*` |
+| scraping-runtime | `/api/scrape/stream`, `/api/scrape/{session_id}/result`, `/ws/episode/{episode_id}` |
+
+Use `api-reference.md` as the authoritative endpoint inventory.
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `architecture.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

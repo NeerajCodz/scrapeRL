@@ -1,6 +1,6 @@
-# ⚙️ Dashboard Settings
+# dashboard-settings
 
-## Table of Contents
+## table-of-contents
 1. [Overview](#overview)
 2. [Memory Settings](#memory-settings)
 3. [API & Model Settings](#api--model-settings)
@@ -14,11 +14,11 @@
 
 ---
 
-## Overview
+## overview
 
 The **Settings Dashboard** provides comprehensive configuration for all aspects of the WebScraper environment, models, MCPs, agents, and observability.
 
-### Settings Structure
+### settings-structure
 
 ```
 Settings
@@ -66,9 +66,9 @@ Settings
 
 ---
 
-## Memory Settings
+## memory-settings
 
-### Configuration
+### configuration
 
 ```typescript
 interface MemorySettings {
@@ -107,7 +107,7 @@ interface MemorySettings {
 }
 ```
 
-### UI Component
+### ui-component
 
 ```jsx
 <MemorySettings>
@@ -143,9 +143,9 @@ interface MemorySettings {
 
 ---
 
-## API & Model Settings
+## api-and-model-settings
 
-### Multi-Provider Configuration
+### multi-provider-configuration
 
 ```typescript
 interface APISettings {
@@ -221,7 +221,7 @@ interface APISettings {
 }
 ```
 
-### UI Component
+### ui-component
 
 ```jsx
 <APISettings>
@@ -270,7 +270,7 @@ interface APISettings {
   </Section>
   
   <Section title="Model Ensemble">
-    <Toggle label="Enable Ensemble (⚠️ Increases Cost)" value={ensembleEnabled} />
+    <Toggle label="Enable Ensemble ( Increases Cost)" value={ensembleEnabled} />
     <Select label="Strategy" options={['Voting', 'Ranking', 'Fusion', 'Verification']} />
     <MultiSelect label="Models" options={allModels} selected={ensembleModels} />
     <Slider label="Min Agreement (%)" value={minAgreement} min={50} max={100} />
@@ -280,9 +280,9 @@ interface APISettings {
 
 ---
 
-## MCP Server Management
+## mcp-server-management
 
-### Configuration
+### configuration
 
 ```typescript
 interface MCPSettings {
@@ -312,7 +312,7 @@ interface MCPServerConfig {
 }
 ```
 
-### UI Component
+### ui-component
 
 ```jsx
 <MCPServerManagement>
@@ -389,9 +389,9 @@ interface MCPServerConfig {
 
 ---
 
-## Agent Behavior
+## agent-behavior
 
-### Configuration
+### configuration
 
 ```typescript
 interface AgentBehaviorSettings {
@@ -421,7 +421,7 @@ interface AgentBehaviorSettings {
 }
 ```
 
-### UI Component
+### ui-component
 
 ```jsx
 <AgentBehaviorSettings>
@@ -473,9 +473,9 @@ interface AgentBehaviorSettings {
 
 ---
 
-## Search Engine Configuration
+## search-engine-configuration
 
-### Configuration
+### configuration
 
 ```typescript
 interface SearchEngineSettings {
@@ -516,7 +516,7 @@ interface SearchEngineSettings {
 }
 ```
 
-### UI Component
+### ui-component
 
 ```jsx
 <SearchEngineSettings>
@@ -567,9 +567,9 @@ interface SearchEngineSettings {
 
 ---
 
-## Network & Proxy
+## network-and-proxy
 
-### Configuration
+### configuration
 
 ```typescript
 interface NetworkSettings {
@@ -608,13 +608,13 @@ interface NetworkSettings {
 }
 ```
 
-### UI - See [proxy-vpn.md](./WebScraper_OpenEnv_SoftwareDoc.md#9-network-layer--vpn--proxy) for full details
+### ui-see-proxy-vpn-md-webscraper-openenv-softwaredoc-md-9-network-layer-vpn-proxy-for-full-details
 
 ---
 
-## Cost Control
+## cost-control
 
-### Configuration
+### configuration
 
 ```typescript
 interface CostControlSettings {
@@ -632,7 +632,7 @@ interface CostControlSettings {
 }
 ```
 
-### UI Component
+### ui-component
 
 ```jsx
 <CostControlSettings>
@@ -692,9 +692,9 @@ interface CostControlSettings {
 
 ---
 
-## Performance Tuning
+## performance-tuning
 
-### Configuration
+### configuration
 
 ```typescript
 interface PerformanceSettings {
@@ -728,7 +728,7 @@ interface PerformanceSettings {
 
 ---
 
-## Import/Export
+## import-export
 
 ```jsx
 <ImportExportSettings>
@@ -748,3 +748,27 @@ interface PerformanceSettings {
 ---
 
 **Next:** See [rewards.md](./rewards.md) for advanced reward function design.
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `settings.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

@@ -1,6 +1,6 @@
-# 🔍 Search Engine Layer
+# search-engine-layer
 
-## Table of Contents
+## table-of-contents
 1. [Overview](#overview)
 2. [Supported Search Engines](#supported-search-engines)
 3. [Query Optimization](#query-optimization)
@@ -12,25 +12,25 @@
 
 ---
 
-## Overview
+## overview
 
 The **Search Engine Layer** enables agents to search the web intelligently, optimize queries, perform multi-hop searches, and evaluate source credibility.
 
-### Capabilities
+### capabilities
 
-- ✅ Multiple search engine APIs (Google, Bing, Brave, DuckDuckGo, Perplexity)
-- ✅ Query optimization and rewriting
-- ✅ Multi-hop search (search → refine → search again)
-- ✅ Source credibility scoring
-- ✅ Result ranking and filtering
-- ✅ Caching and deduplication
-- ✅ Cost tracking
+-  Multiple search engine APIs (Google, Bing, Brave, DuckDuckGo, Perplexity)
+-  Query optimization and rewriting
+-  Multi-hop search (search → refine → search again)
+-  Source credibility scoring
+-  Result ranking and filtering
+-  Caching and deduplication
+-  Cost tracking
 
 ---
 
-## Supported Search Engines
+## supported-search-engines
 
-### 1. Google Search API
+### 1-google-search-api
 
 **Pros:**
 - Most comprehensive results
@@ -63,7 +63,7 @@ results = search_engine.search(
 )
 ```
 
-### 2. Bing Search API
+### 2-bing-search-api
 
 **Pros:**
 - Good quality results
@@ -86,7 +86,7 @@ results = search_engine.search(
 }
 ```
 
-### 3. Brave Search API
+### 3-brave-search-api
 
 **Pros:**
 - Privacy-focused
@@ -110,7 +110,7 @@ results = search_engine.search(
 }
 ```
 
-### 4. DuckDuckGo (Free, No API Key)
+### 4-duckduckgo-free-no-api-key
 
 **Pros:**
 - Completely free
@@ -133,7 +133,7 @@ results = DDGS().text(
 )
 ```
 
-### 5. Perplexity AI (AI-Powered Search)
+### 5-perplexity-ai-ai-powered-search
 
 **Pros:**
 - Returns AI-summarized answers with citations
@@ -157,9 +157,9 @@ results = DDGS().text(
 
 ---
 
-## Query Optimization
+## query-optimization
 
-### Query Rewriter
+### query-rewriter
 
 ```python
 class QueryOptimizer:
@@ -227,7 +227,7 @@ class QueryOptimizer:
         return query
 ```
 
-### Query Expansion
+### query-expansion
 
 ```python
 class QueryExpander:
@@ -259,7 +259,7 @@ class QueryExpander:
         return variations[:5]  # Limit to top 5
 ```
 
-### Bad Query Detection
+### bad-query-detection
 
 ```python
 def is_bad_query(query: str) -> bool:
@@ -283,9 +283,9 @@ def is_bad_query(query: str) -> bool:
 
 ---
 
-## Multi-Hop Search
+## multi-hop-search
 
-### Multi-Hop Strategy
+### multi-hop-strategy
 
 ```python
 class MultiHopSearch:
@@ -353,7 +353,7 @@ class MultiHopSearch:
         return original_query
 ```
 
-### Example Multi-Hop Flow
+### example-multi-hop-flow
 
 ```python
 # Hop 1: Initial broad search
@@ -374,9 +374,9 @@ results_3 = search(query_3)
 
 ---
 
-## Source Credibility Scoring
+## source-credibility-scoring
 
-### Credibility Scorer
+### credibility-scorer
 
 ```python
 class SourceCredibilityScorer:
@@ -499,7 +499,7 @@ class SourceCredibilityScorer:
             return 0.2
 ```
 
-### Domain Blacklist
+### domain-blacklist
 
 ```python
 DOMAIN_BLACKLIST = [
@@ -518,9 +518,9 @@ def is_blacklisted(url: str) -> bool:
 
 ---
 
-## Result Ranking
+## result-ranking
 
-### Ranking Algorithm
+### ranking-algorithm
 
 ```python
 class ResultRanker:
@@ -605,9 +605,9 @@ class ResultRanker:
 
 ---
 
-## Caching & Deduplication
+## caching-and-deduplication
 
-### Search Result Cache
+### search-result-cache
 
 ```python
 class SearchCache:
@@ -645,7 +645,7 @@ class SearchCache:
         return f"{engine}:{normalized}"
 ```
 
-### Result Deduplication
+### result-deduplication
 
 ```python
 class ResultDeduplicator:
@@ -701,9 +701,9 @@ class ResultDeduplicator:
 
 ---
 
-## Configuration
+## configuration
 
-### Search Engine Settings
+### search-engine-settings
 
 ```typescript
 interface SearchEngineConfig {
@@ -742,7 +742,7 @@ interface SearchEngineConfig {
 }
 ```
 
-### Usage Example
+### usage-example
 
 ```python
 # Initialize search engine
@@ -780,3 +780,27 @@ ranked = search.rank_results(
 ---
 
 **Next:** See [agents.md](./agents.md) for agent architecture.
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `search-engine.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

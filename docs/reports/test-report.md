@@ -1,6 +1,6 @@
-# ScrapeRL Test Report
+# scraperl-test-report
 
-## Summary
+## summary
 
 | Metric | Value |
 |--------|-------|
@@ -13,61 +13,61 @@
 | **Node Version** | 20.x |
 | **Last Run** | 2026-03-28 |
 
-## Build Status
+## build-status
 
 | Component | Status |
 |-----------|--------|
-| Backend Lint | ✅ Pass |
-| Frontend Lint | ✅ Pass |
-| Frontend Build | ✅ Pass |
-| Docker Build | ✅ Pass |
-| Container Health | ✅ Healthy |
+| Backend Lint |  Pass |
+| Frontend Lint |  Pass |
+| Frontend Build |  Pass |
+| Docker Build |  Pass |
+| Container Health |  Healthy |
 
-## Test Categories
+## test-categories
 
-### API Tests (62 tests)
-
-| Category | Tests | Status |
-|----------|-------|--------|
-| Health | 2 | ✅ Pass |
-| Agents | 2 | ✅ Pass |
-| Episode | 3 | ✅ Pass |
-| Tools | 2 | ✅ Pass |
-| Settings | 13 | ✅ Pass |
-| Plugins | 16 | ✅ Pass |
-| Memory | 10 | ✅ Pass |
-| Tasks | 10 | ✅ Pass |
-
-### Core Tests (33 tests)
+### api-tests-62-tests
 
 | Category | Tests | Status |
 |----------|-------|--------|
-| Action | 4 | ✅ Pass |
-| Environment | 2 | ✅ Pass |
-| Episode | 21 | ✅ Pass |
-| Observation | 4 | ✅ Pass |
-| Reward | 2 | ✅ Pass |
+| Health | 2 |  Pass |
+| Agents | 2 |  Pass |
+| Episode | 3 |  Pass |
+| Tools | 2 |  Pass |
+| Settings | 13 |  Pass |
+| Plugins | 16 |  Pass |
+| Memory | 10 |  Pass |
+| Tasks | 10 |  Pass |
 
-### Agent Tests (3 tests)
-
-| Category | Tests | Status |
-|----------|-------|--------|
-| Coordinator | 3 | ✅ Pass |
-
-### Model Tests (4 tests)
+### core-tests-33-tests
 
 | Category | Tests | Status |
 |----------|-------|--------|
-| Base Models | 4 | ✅ Pass |
+| Action | 4 |  Pass |
+| Environment | 2 |  Pass |
+| Episode | 21 |  Pass |
+| Observation | 4 |  Pass |
+| Reward | 2 |  Pass |
 
-### Frontend Tests (15 tests)
+### agent-tests-3-tests
 
 | Category | Tests | Status |
 |----------|-------|--------|
-| Helpers | 9 | ✅ Pass |
-| Components | 6 | ✅ Pass |
+| Coordinator | 3 |  Pass |
 
-## Module Coverage
+### model-tests-4-tests
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| Base Models | 4 |  Pass |
+
+### frontend-tests-15-tests
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| Helpers | 9 |  Pass |
+| Components | 6 |  Pass |
+
+## module-coverage
 
 | Module | Coverage | Notes |
 |--------|----------|-------|
@@ -87,58 +87,58 @@
 | `app.api.deps` | 63% | API dependencies |
 | `app.core.reward` | 59% | Reward calculation |
 
-## API Endpoints Verified
+## api-endpoints-verified
 
-### Health & Status
-- ✅ GET /api/health - Service health check
-- ✅ GET /api/ready - Service readiness
+### health-and-status
+-  GET /api/health - Service health check
+-  GET /api/ready - Service readiness
 
-### Settings
-- ✅ GET /api/settings - Get configuration
-- ✅ POST /api/settings/api-key - Update API key
-- ✅ POST /api/settings/model - Select model
-- ✅ GET /api/settings/api-key-required - Check key status
+### settings
+-  GET /api/settings - Get configuration
+-  POST /api/settings/api-key - Update API key
+-  POST /api/settings/model - Select model
+-  GET /api/settings/api-key-required - Check key status
 
-### Plugins
-- ✅ GET /api/plugins - List all plugins
-- ✅ GET /api/plugins?category=X - Filter by category
-- ✅ GET /api/plugins/{id} - Get specific plugin
-- ✅ POST /api/plugins/install - Install plugin
-- ✅ POST /api/plugins/uninstall - Uninstall plugin
-- ✅ GET /api/plugins/categories - Get categories
+### plugins
+-  GET /api/plugins - List all plugins
+-  GET /api/plugins?category=X - Filter by category
+-  GET /api/plugins/{id} - Get specific plugin
+-  POST /api/plugins/install - Install plugin
+-  POST /api/plugins/uninstall - Uninstall plugin
+-  GET /api/plugins/categories - Get categories
 
-### Memory
-- ✅ POST /api/memory/store - Store entry
-- ✅ POST /api/memory/query - Query entries
-- ✅ GET /api/memory/{id} - Get entry
-- ✅ DELETE /api/memory/{id} - Delete entry
-- ✅ GET /api/memory/stats/overview - Get stats
-- ✅ DELETE /api/memory/clear/{type} - Clear layer
-- ✅ POST /api/memory/consolidate - Consolidate
+### memory
+-  POST /api/memory/store - Store entry
+-  POST /api/memory/query - Query entries
+-  GET /api/memory/{id} - Get entry
+-  DELETE /api/memory/{id} - Delete entry
+-  GET /api/memory/stats/overview - Get stats
+-  DELETE /api/memory/clear/{type} - Clear layer
+-  POST /api/memory/consolidate - Consolidate
 
-### Tasks
-- ✅ GET /api/tasks - List tasks
-- ✅ GET /api/tasks/{id} - Get task
-- ✅ POST /api/tasks - Create task
-- ✅ GET /api/tasks/types - Get task types
+### tasks
+-  GET /api/tasks - List tasks
+-  GET /api/tasks/{id} - Get task
+-  POST /api/tasks - Create task
+-  GET /api/tasks/types - Get task types
 
-## Docker Build
+## docker-build
 
-- ✅ Docker Compose build successful
-- ✅ Multi-stage build (Node.js + Python)
-- ✅ Frontend static assets bundled
-- ✅ Image: `scraperl:latest`
-- ✅ Health check endpoint working
+-  Docker Compose build successful
+-  Multi-stage build (Node.js + Python)
+-  Frontend static assets bundled
+-  Image: `scraperl:latest`
+-  Health check endpoint working
 
-## Frontend Build
+## frontend-build
 
-- ✅ TypeScript compilation successful
-- ✅ Vite build successful
-- ✅ ESLint passed (no errors)
-- ✅ Vitest tests passing
+-  TypeScript compilation successful
+-  Vite build successful
+-  ESLint passed (no errors)
+-  Vitest tests passing
 - Output: `dist/` (197.9 KB gzip)
 
-## Test Execution
+## test-execution
 
 ```bash
 # Backend tests
@@ -152,7 +152,7 @@ npm test -- --run
 # 15 passed in 1.55s
 ```
 
-## Live API Verification
+## live-api-verification
 
 ```bash
 # Health check
@@ -168,7 +168,7 @@ curl http://localhost:7860/api/plugins
 # {"plugins": {...}, "stats": {"total": 21, "installed": 11}}
 ```
 
-## Notes
+## notes
 
 1. **Settings API**: Full coverage for API key management and model selection
 2. **Plugins API**: Comprehensive tests for install/uninstall workflows
@@ -176,16 +176,16 @@ curl http://localhost:7860/api/plugins
 4. **Memory API**: Full CRUD operations tested
 5. **Tasks API**: List, filter, create, and get operations tested
 
-## Manual Testing
+## manual-testing
 
-See [MANUAL_TEST_REPORT.md](./MANUAL_TEST_REPORT.md) for comprehensive manual testing results.
+See [manual-test-report.md](./manual-test-report.md) for comprehensive manual testing results.
 
 **Manual Test Summary:**
 - Total Tests: 89
 - Passed: 89 (100%)
 - Failed: 0
 
-## Recommendations
+## recommendations
 
 1. Add mocking for LLM providers to increase agent coverage
 2. Add E2E tests with Playwright for frontend
@@ -198,3 +198,18 @@ See [MANUAL_TEST_REPORT.md](./MANUAL_TEST_REPORT.md) for comprehensive manual te
 *Generated: 2026-03-28*
 *Author: NeerajCodz*
 *Test Suite: ScrapeRL v0.1.0*
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

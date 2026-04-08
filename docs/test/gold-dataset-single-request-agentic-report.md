@@ -1,16 +1,16 @@
-# Agentic Single-Request Gold Dataset Report
+# agentic-single-request-gold-dataset-report
 
-## Objective
+## objective
 Validate that the scraper can handle an **agentic task in one curl request**:
 - discover a data source on its own,
 - navigate and extract data,
 - verify quality,
 - return a final **CSV dataset** of monthly gold prices from 2016 with source links.
 
-## Run Timestamp
+## run-timestamp
 - `2026-04-04T23:13:38.404Z`
 
-## Single Curl Request Used
+## single-curl-request-used
 ```bash
 curl.exe -sS -N -X POST "http://localhost:3000/api/scrape/stream" \
   -H "Content-Type: application/json" \
@@ -29,14 +29,14 @@ curl.exe -sS -N -X POST "http://localhost:3000/api/scrape/stream" \
   }'
 ```
 
-## Stream Monitoring Summary
+## stream-monitoring-summary
 - Final status: **completed**
 - Errors: **0**
 - URLs processed: **1**
 - Steps: **27**
 - Reward: **9.56626984126984**
 
-### Agent/Plugin Step Actions Observed
+### agent-plugin-step-actions-observed
 | Action | Count |
 | --- | ---: |
 | plugins | 1 |
@@ -50,7 +50,7 @@ curl.exe -sS -N -X POST "http://localhost:3000/api/scrape/stream" \
 | verifier | 1 |
 | complete | 1 |
 
-## Output Quality Check
+## output-quality-check
 - Output format: **csv**
 - CSV lines: **124** (header + 123 rows)
 - Row count field: **123**
@@ -58,7 +58,7 @@ curl.exe -sS -N -X POST "http://localhost:3000/api/scrape/stream" \
 - Source link used:
   - `https://raw.githubusercontent.com/datasets/gold-prices/master/data/monthly.csv`
 
-### CSV Preview (Head)
+### csv-preview-head
 ```csv
 month,gold_price_usd,source_link
 2016-01,1097.91,https://raw.githubusercontent.com/datasets/gold-prices/master/data/monthly.csv
@@ -67,7 +67,7 @@ month,gold_price_usd,source_link
 2016-04,1242.26,https://raw.githubusercontent.com/datasets/gold-prices/master/data/monthly.csv
 ```
 
-### CSV Preview (Tail)
+### csv-preview-tail
 ```csv
 2025-11,4087.19,https://raw.githubusercontent.com/datasets/gold-prices/master/data/monthly.csv
 2025-12,4309.23,https://raw.githubusercontent.com/datasets/gold-prices/master/data/monthly.csv
@@ -76,5 +76,20 @@ month,gold_price_usd,source_link
 2026-03,4855.54,https://raw.githubusercontent.com/datasets/gold-prices/master/data/monthly.csv
 ```
 
-## Result
+## result
 The task now works as a true one-request agentic scrape flow: query asset resolution, navigation, extraction, verification, plugin participation, and final CSV output all complete in a single `/api/scrape/stream` curl call.
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

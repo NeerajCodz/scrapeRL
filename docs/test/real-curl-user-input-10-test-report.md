@@ -1,12 +1,12 @@
-# Real Curl User-Style Test Report (10 Scenarios)
+# real-curl-user-style-test-report-10-scenarios
 
-## Run Context
+## run-context
 - Timestamp: `2026-04-04T23:08:19.953Z` (user-request window)
 - Stack: `docker compose up --build -d`
 - API base used for all calls: `http://localhost:3000/api`
 - All requests executed with **`curl.exe`** (not mocked HTTP clients)
 
-## Curl Flow Used
+## curl-flow-used
 ```bash
 curl.exe -sS -X POST "http://localhost:3000/api/scrape/" \
   -H "Content-Type: application/json" \
@@ -17,7 +17,7 @@ curl.exe -sS "http://localhost:3000/api/scrape/<session_id>/result"
 curl.exe -sS -X DELETE "http://localhost:3000/api/scrape/<session_id>/cleanup"
 ```
 
-## Example Real Request Payload
+## example-real-request-payload
 ```json
 {
   "session_id": "realcurl-cedd928b3d",
@@ -34,7 +34,7 @@ curl.exe -sS -X DELETE "http://localhost:3000/api/scrape/<session_id>/cleanup"
 }
 ```
 
-## Test Matrix (10/10 Real Requests)
+## test-matrix-10-10-real-requests
 | # | Test | Provider / Model | Assets | Complexity | Format | Memory | Plugins | Final | Steps | Reward | Errors |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: |
 | 1 | ecommerce-low-json | nvidia / meta/llama-3.3-70b-instruct | https://example.com | low | json | on | mcp-html | completed | 10 | 4.834 | 0 |
@@ -48,7 +48,7 @@ curl.exe -sS -X DELETE "http://localhost:3000/api/scrape/<session_id>/cleanup"
 | 9 | science-high-csv | nvidia / meta/llama-3.3-70b-instruct | https://www.nasa.gov, https://docs.python.org/3/ | high | csv | off | mcp-html, proc-json | completed | 43 | 19.580 | 0 |
 | 10 | legal-low-text | nvidia / meta/llama-3.3-70b-instruct | https://en.wikipedia.org/wiki/Terms_of_service | low | text | on | skill-planner | completed | 10 | 4.834 | 0 |
 
-## Aggregate Outcome
+## aggregate-outcome
 - Total tests: **10**
 - Completed: **10**
 - Partial: **0**
@@ -57,6 +57,21 @@ curl.exe -sS -X DELETE "http://localhost:3000/api/scrape/<session_id>/cleanup"
 - Total reward: **112.266** (avg **11.227** per test)
 - Total reported errors: **0**
 
-## Notes
+## notes
 - These were real curl-driven end-to-end requests with real URL assets and user-style instruction prompts.
 - Response payloads completed cleanly across low/medium/high complexity, JSON/CSV/Markdown/Text output instructions, memory on/off, and mixed plugin sets.
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

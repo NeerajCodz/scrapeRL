@@ -1,19 +1,19 @@
-# Observability and Dashboard
+# observability-and-dashboard
 
-## Overview
+## overview
 
 Observability provides deep insight into runtime behavior, model usage, tool execution, memory quality, and rewards.
 
-## Dashboard Sections
+## dashboard-sections
 
-### 1. Live Thought Stream
+### 1-live-thought-stream
 
 - chronological reasoning notes
 - model/router choice trace
 - action confidence timeline
 - override events
 
-### 2. Navigation Map
+### 2-navigation-map
 
 Graph of visited pages:
 
@@ -22,37 +22,37 @@ Graph of visited pages:
 - node color = relevance/confidence
 - revisit highlighting
 
-### 3. MCP Usage Panel
+### 3-mcp-usage-panel
 
 - tool call count by server
 - avg latency by tool
 - error rate and retries
 - top successful tool chains
 
-### 4. Memory Viewer
+### 4-memory-viewer
 
 - inspect short/working/long/shared memory
 - filter by task/domain/confidence
 - edit/delete entries
 - prune previews
 
-### 5. Reward Analytics
+### 5-reward-analytics
 
 - per-step reward breakdown
 - component contribution trends
 - penalty heatmap
 - episode comparison
 
-### 6. Cost and Token Monitor
+### 6-cost-and-token-monitor
 
 - per-provider usage
 - per-model token counts
 - cumulative cost vs budget
 - forecasted burn rate
 
-## Core Metrics
+## core-metrics
 
-### Agent Metrics
+### agent-metrics
 
 - task completion rate
 - avg steps to completion
@@ -60,28 +60,28 @@ Graph of visited pages:
 - generalization score
 - exploration ratio
 
-### Tool Metrics
+### tool-metrics
 
 - tool success rate
 - timeout ratio
 - fallback frequency
 - schema validation failures
 
-### Memory Metrics
+### memory-metrics
 
 - retrieval hit rate
 - relevance score distribution
 - prune rate
 - memory-assisted success ratio
 
-### Search Metrics
+### search-metrics
 
 - query success rate
 - multi-hop depth distribution
 - credibility score average
 - duplicate result ratio
 
-## Logging Model
+## logging-model
 
 Structured logs (JSON):
 
@@ -98,7 +98,7 @@ Structured logs (JSON):
 }
 ```
 
-## Tracing
+## tracing
 
 Per-episode trace includes:
 
@@ -109,7 +109,7 @@ Per-episode trace includes:
 - memory operations
 - final submission and grader results
 
-## Alerts
+## alerts
 
 Configurable alerts:
 
@@ -119,7 +119,7 @@ Configurable alerts:
 - memory bloat
 - anomalous low reward streak
 
-## APIs
+## apis
 
 - `GET /api/metrics/summary`
 - `GET /api/metrics/timeseries`
@@ -128,14 +128,14 @@ Configurable alerts:
 - `GET /api/memory/stats`
 - `GET /api/tools/stats`
 
-## Recommended Dashboard Layout
+## recommended-dashboard-layout
 
 1. Top row: completion, cost, latency, error rate
 2. Mid row: thought stream + navigation graph
 3. Lower row: reward breakdown + MCP usage + memory viewer
 4. Bottom row: raw trace and export controls
 
-## Export and Audit
+## export-and-audit
 
 Exports:
 
@@ -145,3 +145,27 @@ Exports:
 - model usage report
 
 All exports include episode and configuration fingerprints for reproducibility.
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `observability.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

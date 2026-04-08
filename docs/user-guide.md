@@ -1,10 +1,10 @@
-# ScrapeRL Documentation
+# scraperl-documentation
 
 Welcome to ScrapeRL - an advanced Reinforcement Learning-powered web scraping environment. This documentation covers all aspects of using and configuring ScrapeRL.
 
 ---
 
-## Table of Contents
+## table-of-contents
 
 1. [Getting Started](#getting-started)
 2. [Dashboard Overview](#dashboard-overview)
@@ -18,9 +18,9 @@ Welcome to ScrapeRL - an advanced Reinforcement Learning-powered web scraping en
 
 ---
 
-## Getting Started
+## getting-started
 
-### What is ScrapeRL?
+### what-is-scraperl
 
 ScrapeRL is an intelligent web scraping system that uses Reinforcement Learning (RL) to learn and adapt scraping strategies. Unlike traditional scrapers, ScrapeRL can:
 
@@ -29,14 +29,14 @@ ScrapeRL is an intelligent web scraping system that uses Reinforcement Learning 
 - **Multi-agent coordination** - Use specialized agents for different tasks
 - **Memory-enhanced** - Remember patterns and optimize future runs
 
-### Quick Start
+### quick-start
 
 1. **Enter a Target URL** - Provide the webpage you want to scrape
 2. **Write an Instruction** - Describe what data you want to extract
 3. **Configure Options** - Select model, agents, and plugins
 4. **Start Episode** - Click Start and watch the magic happen!
 
-### Example Task
+### example-task
 
 ```
 URL: https://example.com/products
@@ -46,11 +46,11 @@ Task Type: Medium
 
 ---
 
-## Dashboard Overview
+## dashboard-overview
 
 The dashboard is your command center for monitoring and controlling scraping operations.
 
-### Layout Structure
+### layout-structure
 
 | Section | Description |
 |---------|-------------|
@@ -60,7 +60,7 @@ The dashboard is your command center for monitoring and controlling scraping ope
 | **Right Sidebar** | Memory stats, extracted data, recent actions |
 | **Bottom Logs** | Real-time terminal-style log output |
 
-### Stats Header
+### stats-header
 
 The header shows key metrics with expandable details:
 
@@ -71,55 +71,55 @@ The header shows key metrics with expandable details:
 
 Click the **⋯** icon on any stat to see detailed statistics (min, max, average).
 
-### Task Configuration
+### task-configuration
 
-#### Task Types
+#### task-types
 
 | Type | Description | Use Case |
 |------|-------------|----------|
-| 🟢 **Low** | Simple single-page scraping | Product page, article text |
-| 🟡 **Medium** | Multi-page with navigation | Search results, listings |
-| 🔴 **High** | Complex interactive tasks | Login-required, forms |
+|  **Low** | Simple single-page scraping | Product page, article text |
+|  **Medium** | Multi-page with navigation | Search results, listings |
+|  **High** | Complex interactive tasks | Login-required, forms |
 
 ---
 
-## Agents
+## agents
 
 ScrapeRL uses a multi-agent architecture where specialized agents handle different aspects of scraping.
 
-### Available Agents
+### available-agents
 
 | Agent | Role | Description |
 |-------|------|-------------|
-| **Coordinator** | 🎯 Orchestrator | Manages all other agents, decides strategy |
-| **Scraper** | 📄 Extractor | Extracts data from page content |
-| **Navigator** | 🧭 Navigation | Handles page navigation, clicking, scrolling |
-| **Analyzer** | 🔍 Analysis | Analyzes extracted data for patterns |
-| **Validator** | ✅ Validation | Validates data quality and completeness |
+| **Coordinator** |  Orchestrator | Manages all other agents, decides strategy |
+| **Scraper** |  Extractor | Extracts data from page content |
+| **Navigator** |  Navigation | Handles page navigation, clicking, scrolling |
+| **Analyzer** |  Analysis | Analyzes extracted data for patterns |
+| **Validator** |  Validation | Validates data quality and completeness |
 
-### Agent Selection
+### agent-selection
 
 1. Click the **Agents** button in the input bar
 2. Select agents you want to enable
 3. Active agents appear in the left sidebar accordion
 4. Monitor agent activity in real-time
 
-### Agent Status Indicators
+### agent-status-indicators
 
-- 🟢 **Active** - Currently processing
-- 🔵 **Ready** - Waiting for task
-- 🟡 **Idle** - Not currently in use
-- 🔴 **Error** - Encountered an issue
+-  **Active** - Currently processing
+-  **Ready** - Waiting for task
+-  **Idle** - Not currently in use
+-  **Error** - Encountered an issue
 
 ---
 
-## Plugins
+## plugins
 
 Extend ScrapeRL's capabilities with plugins organized by category.
 
-### Plugin Categories
+### plugin-categories
 
-#### 🔧 MCPs (Model Context Protocols)
+#### mcps-model-context-protocols
 
 Tools that provide browser automation and page interaction:
 
@@ -129,7 +129,7 @@ Tools that provide browser automation and page interaction:
 | Puppeteer MCP | Headless Chrome control |
 | Playwright MCP | Cross-browser automation |
 
-#### ⚡ Skills
+#### skills
 
 Specialized capabilities for specific tasks:
 
@@ -139,7 +139,7 @@ Specialized capabilities for specific tasks:
 | Data Extraction | Structured data parsing |
 | Form Filling | Automated form completion |
 
-#### 🔌 APIs
+#### apis
 
 External service integrations:
 
@@ -149,7 +149,7 @@ External service integrations:
 | Jina Reader | Content reader API |
 | Serper | Search engine results API |
 
-#### 👁️ Vision
+#### vision
 
 Visual understanding capabilities:
 
@@ -159,7 +159,7 @@ Visual understanding capabilities:
 | Gemini Vision | Google visual AI |
 | Claude Vision | Anthropic visual models |
 
-### Managing Plugins
+### managing-plugins
 
 1. Go to **Plugins** tab
 2. Browse by category
@@ -168,11 +168,11 @@ Visual understanding capabilities:
 
 ---
 
-## Memory System
+## memory-system
 
 ScrapeRL uses a hierarchical memory system for context retention.
 
-### Memory Layers
+### memory-layers
 
 | Layer | Purpose | Retention |
 |-------|---------|-----------|
@@ -181,7 +181,7 @@ ScrapeRL uses a hierarchical memory system for context retention.
 | **Semantic** | Learned patterns | Persistent |
 | **Procedural** | Action sequences | Persistent |
 
-### Memory Features
+### memory-features
 
 - **Auto-consolidation** - Promotes important data between layers
 - **Similarity search** - Find related memories quickly
@@ -189,9 +189,9 @@ ScrapeRL uses a hierarchical memory system for context retention.
 
 ---
 
-## Models & Providers
+## models-and-providers
 
-### Supported Providers
+### supported-providers
 
 | Provider | Models | Best For |
 |----------|--------|----------|
@@ -200,13 +200,13 @@ ScrapeRL uses a hierarchical memory system for context retention.
 | **OpenAI** | GPT-4 Turbo | High accuracy |
 | **Anthropic** | Claude 3 Opus | Complex reasoning |
 
-### Model Selection
+### model-selection
 
 1. Click **Model** button in input bar
 2. Select from available models
 3. Models require appropriate API keys
 
-### API Keys
+### api-keys
 
 Configure API keys in **Settings > API Keys**:
 
@@ -217,9 +217,9 @@ Configure API keys in **Settings > API Keys**:
 
 ---
 
-## Settings
+## settings
 
-### General Settings
+### general-settings
 
 | Setting | Description |
 |---------|-------------|
@@ -228,7 +228,7 @@ Configure API keys in **Settings > API Keys**:
 | Auto-save Episodes | Automatically save completed episodes |
 | Debug Mode | Enable verbose logging |
 
-### Budget & Limits
+### budget-and-limits
 
 Control API usage costs:
 
@@ -237,9 +237,9 @@ Control API usage costs:
 - **Max Tokens** - Token limit per request
 - **Alert Threshold** - Warning at 80% usage
 
-> 💡 Budget limits are disabled by default. Enable in Settings to control spending.
+>  Budget limits are disabled by default. Enable in Settings to control spending.
 
-### Appearance
+### appearance
 
 - **Theme** - Dark (default), Light, Auto
 - **Compact Mode** - Reduce UI spacing
@@ -247,9 +247,9 @@ Control API usage costs:
 
 ---
 
-## API Reference
+## api-reference
 
-### Health Check
+### health-check
 
 ```bash
 GET /api/health
@@ -264,7 +264,7 @@ Response:
 }
 ```
 
-### Episode Management
+### episode-management
 
 ```bash
 # Start new episode
@@ -285,7 +285,7 @@ POST /api/episode/step
 GET /api/episode/state
 ```
 
-### Memory API
+### memory-api
 
 ```bash
 # Store entry
@@ -305,7 +305,7 @@ POST /api/memory/query
 }
 ```
 
-### Plugins API
+### plugins-api
 
 ```bash
 # List plugins
@@ -322,15 +322,15 @@ POST /api/plugins/uninstall
 
 ---
 
-## Troubleshooting
+## troubleshooting
 
-### Common Issues
+### common-issues
 
-#### "API Key Required" Error
+#### api-key-required-error
 
 **Solution:** Configure at least one API key in Settings > API Keys
 
-#### Episode Not Starting
+#### episode-not-starting
 
 **Checklist:**
 - [ ] Valid URL entered
@@ -338,18 +338,18 @@ POST /api/plugins/uninstall
 - [ ] API key configured
 - [ ] System status shows "Online"
 
-#### Slow Performance
+#### slow-performance
 
 **Tips:**
 - Use Groq for faster inference
 - Reduce enabled plugins
 - Lower task complexity if possible
 
-#### Memory Full
+#### memory-full
 
 **Solution:** Clear memory layers in Settings > Advanced > Clear Cache
 
-### Getting Help
+### getting-help
 
 - Check the logs panel for error details
 - View episode history for past issues
@@ -357,7 +357,7 @@ POST /api/plugins/uninstall
 
 ---
 
-## Keyboard Shortcuts
+## keyboard-shortcuts
 
 | Shortcut | Action |
 |----------|--------|
@@ -368,9 +368,9 @@ POST /api/plugins/uninstall
 
 ---
 
-## Version History
+## version-history
 
-### v0.1.0 (Current)
+### v0-1-0-current
 
 - Initial release
 - Multi-agent architecture
@@ -382,4 +382,19 @@ POST /api/plugins/uninstall
 
 *Documentation last updated: March 2026*
 
-*Built with ❤️ by NeerajCodz*
+*Built with  by NeerajCodz*
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |

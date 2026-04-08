@@ -1,6 +1,6 @@
-# 🤖 Multi-Model API System
+# multi-model-api-system
 
-## Table of Contents
+## table-of-contents
 1. [Overview](#overview)
 2. [Supported Providers](#supported-providers)
 3. [Smart Model Router](#smart-model-router)
@@ -12,7 +12,7 @@
 
 ---
 
-## Overview
+## overview
 
 The **Multi-Model API System** provides a unified interface for interacting with multiple LLM providers (OpenAI, Anthropic, Google, Groq, etc.), enabling:
 
@@ -22,7 +22,15 @@ The **Multi-Model API System** provides a unified interface for interacting with
 - **Reliability:** Fallback to alternative models on failure
 - **Experimentation:** A/B test prompts and models
 
-### Architecture
+## related-api-reference
+
+| area | reference |
+| --- | --- |
+| http-websocket-endpoints | `api-reference.md` |
+| openenv-runtime-contract | `openenv.md` |
+| architecture-placement | `architecture.md` |
+
+### architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -59,9 +67,9 @@ The **Multi-Model API System** provides a unified interface for interacting with
 
 ---
 
-## Supported Providers
+## supported-providers
 
-### 1. OpenAI
+### 1-openai
 
 **Models:**
 - `gpt-4-turbo` - Best reasoning, multimodal
@@ -94,7 +102,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 }
 ```
 
-### 2. Anthropic (Claude)
+### 2-anthropic-claude
 
 **Models:**
 - `claude-3-opus-20240229` - Most capable
@@ -126,7 +134,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 }
 ```
 
-### 3. Google (Gemini)
+### 3-google-gemini
 
 **Models:**
 - `gemini-1.5-pro` - Best quality, 2M context
@@ -157,7 +165,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 }
 ```
 
-### 4. Groq
+### 4-groq
 
 **Models:**
 - `llama-3.1-405b` - Largest Llama
@@ -189,7 +197,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 }
 ```
 
-### 5. Mistral AI
+### 5-mistral-ai
 
 **Models:**
 - `mistral-large-latest` - Best quality
@@ -210,7 +218,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 }
 ```
 
-### 6. Cohere
+### 6-cohere
 
 **Models:**
 - `command-r-plus` - Best for RAG
@@ -219,7 +227,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 
 **Specialization:** RAG, embeddings, reranking
 
-### 7. Perplexity
+### 7-perplexity
 
 **Models:**
 - `pplx-70b-online` - Web-connected
@@ -227,7 +235,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 
 **Specialization:** Real-time web search and citations
 
-### 8. Together AI
+### 8-together-ai
 
 **Models:** 50+ open-source models
 - Llama variants
@@ -236,7 +244,7 @@ The **Multi-Model API System** provides a unified interface for interacting with
 
 **Use Case:** Access to latest open-source models
 
-### 9. Custom / Self-Hosted
+### 9-custom-self-hosted
 
 **Supported:**
 - **Ollama** (local models)
@@ -259,11 +267,11 @@ The **Multi-Model API System** provides a unified interface for interacting with
 
 ---
 
-## Smart Model Router
+## smart-model-router
 
 The **Smart Model Router** automatically selects the best model for each request based on task characteristics.
 
-### Routing Strategy
+### routing-strategy
 
 ```python
 class ModelRouter:
@@ -311,7 +319,7 @@ class ModelRouter:
         return self.get_model("gemini-1.5-flash")
 ```
 
-### Routing Rules
+### routing-rules
 
 | Task Type | Input Size | Priority | Recommended Model | Reason |
 |-----------|-----------|----------|-------------------|--------|
@@ -325,7 +333,7 @@ class ModelRouter:
 | Vision | Images | Any | `gpt-4o` | Best multimodal |
 | Web Search | Any | Any | `perplexity` | Web-connected |
 
-### Configuration
+### configuration
 
 ```python
 class RouterConfig(BaseModel):
@@ -357,13 +365,13 @@ class RouterConfig(BaseModel):
 
 ---
 
-## Model Ensemble
+## model-ensemble
 
 **Model Ensemble** runs multiple models in parallel and merges their outputs for higher quality or consensus.
 
-### Ensemble Strategies
+### ensemble-strategies
 
-#### 1. Voting (Classification/Extraction)
+#### 1-voting-classification-extraction
 
 Run 3+ models, take majority vote.
 
@@ -395,7 +403,7 @@ result = await ensemble.predict(
 # Result: {"result": "$49.99", "confidence": 1.0, "votes": {"$49.99": 3}}
 ```
 
-#### 2. Ranking (Quality Assessment)
+#### 2-ranking-quality-assessment
 
 Run multiple models, rank outputs by quality.
 
@@ -429,7 +437,7 @@ results = await ensemble.generate(
 best_result = results[0]  # Highest quality
 ```
 
-#### 3. Fusion (Merging Outputs)
+#### 3-fusion-merging-outputs
 
 Merge complementary outputs from multiple models.
 
@@ -463,7 +471,7 @@ product = await ensemble.extract_structured(
 # Merges: {name: "...", price: "$X", rating: "Y" } from all models
 ```
 
-#### 4. Verification (Primary + Validator)
+#### 4-verification-primary-validator
 
 One model generates, another validates.
 
@@ -503,7 +511,7 @@ result = await ensemble.generate_and_verify(
 )
 ```
 
-### Ensemble Configuration
+### ensemble-configuration
 
 ```python
 class EnsembleConfig(BaseModel):
@@ -526,11 +534,11 @@ class EnsembleConfig(BaseModel):
 
 ---
 
-## Cost & Token Tracking
+## cost-and-token-tracking
 
 Track spending and token usage across all models.
 
-### Cost Tracker
+### cost-tracker
 
 ```python
 class CostTracker:
@@ -583,7 +591,7 @@ class CostTracker:
         })
 ```
 
-### Budget Enforcement
+### budget-enforcement
 
 ```python
 class BudgetEnforcer:
@@ -608,7 +616,7 @@ class BudgetEnforcer:
         return response
 ```
 
-### Token Usage Dashboard
+### token-usage-dashboard
 
 **UI Display:**
 ```
@@ -640,18 +648,18 @@ class BudgetEnforcer:
 │ Budget: $12.34 / $20.00 (62% used)                           │
 │ [█████████████████░░░░░░░░░░]                                │
 │                                                               │
-│ ⚠️ Budget 80% threshold: Alert enabled                       │
+│  Budget 80% threshold: Alert enabled                       │
 │                                                               │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Prompt Management
+## prompt-management
 
 Manage, version, and A/B test prompts.
 
-### Prompt Templates
+### prompt-templates
 
 ```python
 class PromptTemplate(BaseModel):
@@ -692,7 +700,7 @@ class PromptManager:
         return new_version
 ```
 
-### Example Templates
+### example-templates
 
 ```python
 # Extraction prompt
@@ -737,7 +745,7 @@ prompt_manager.register("extraction_v1", EXTRACTION_PROMPT, ["target_fields", "h
 prompt_manager.register("reasoning_v1", REASONING_PROMPT, ["goal", "url", "actions", "history"])
 ```
 
-### A/B Testing
+### a-b-testing
 
 ```python
 class PromptABTest:
@@ -778,9 +786,9 @@ print(f"Best variant: v{winner}")
 
 ---
 
-## Configuration
+## configuration
 
-### Settings Panel
+### settings-panel
 
 ```python
 class APISettings(BaseModel):
@@ -819,34 +827,34 @@ class APISettings(BaseModel):
 │                                                             │
 │ Model Providers:                                            │
 │ ┌─────────────────────────────────────────────────────┐    │
-│ │ ☑ OpenAI                                             │    │
+│ │  OpenAI                                             │    │
 │ │   API Key: [sk-proj-••••••••••••••••] [Test]       │    │
 │ │   Default: [gpt-4o-mini ▼]                          │    │
 │ │                                                      │    │
-│ │ ☑ Anthropic                                          │    │
+│ │  Anthropic                                          │    │
 │ │   API Key: [sk-ant-••••••••••••••••] [Test]        │    │
 │ │   Default: [claude-3-5-sonnet ▼]                    │    │
 │ │                                                      │    │
-│ │ ☑ Google                                             │    │
+│ │  Google                                             │    │
 │ │   API Key: [AIza••••••••••••••••••••] [Test]       │    │
 │ │   Default: [gemini-1.5-flash ▼]                     │    │
 │ │                                                      │    │
-│ │ ☑ Groq                                               │    │
+│ │  Groq                                               │    │
 │ │   API Key: [gsk_••••••••••••••••••••] [Test]       │    │
 │ │   Default: [llama-3.1-70b-versatile ▼]              │    │
 │ │                                                      │    │
-│ │ ☐ Mistral   [Configure]                             │    │
-│ │ ☐ Cohere    [Configure]                             │    │
-│ │ ☐ Custom    [Configure]                             │    │
+│ │  Mistral   [Configure]                             │    │
+│ │  Cohere    [Configure]                             │    │
+│ │  Custom    [Configure]                             │    │
 │ └─────────────────────────────────────────────────────┘    │
 │                                                             │
 │ Smart Routing:                                              │
-│   ☑ Enabled                                                │
+│    Enabled                                                │
 │   Strategy: [Task-Based ▼]                                 │
 │   Fallback: [claude → gpt-4o-mini → gemini → groq]        │
 │                                                             │
 │ Model Ensemble:                                             │
-│   ☐ Enabled (increases cost)                               │
+│    Enabled (increases cost)                               │
 │   Strategy: [Voting ▼]                                     │
 │   Models:   [gpt-4o-mini, gemini-flash, groq/llama ▼]     │
 │                                                             │
@@ -861,9 +869,9 @@ class APISettings(BaseModel):
 
 ---
 
-## API Reference
+## api-reference
 
-### Python Client
+### python-client
 
 ```python
 from webscraper_env import MultiModelAPI
@@ -898,7 +906,7 @@ async for chunk in api.generate_stream(prompt="...", model="claude-3-5-sonnet"):
 
 ---
 
-## Site Template APIs
+## site-template-apis
 
 The backend now exposes inbuilt site templates for agent orchestration:
 
@@ -920,3 +928,13 @@ curl -X POST http://localhost:8000/api/sites/match \
 ---
 
 **Next:** See [mcp.md](./mcp.md) for MCP server integration.
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```

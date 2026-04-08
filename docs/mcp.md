@@ -1,6 +1,6 @@
-# 🔌 MCP Server Integration
+# mcp-server-integration
 
-## Table of Contents
+## table-of-contents
 1. [Overview](#overview)
 2. [Available MCP Servers](#available-mcp-servers)
 3. [Tool Registry & Discovery](#tool-registry--discovery)
@@ -12,11 +12,11 @@
 
 ---
 
-## Overview
+## overview
 
 The **Model Context Protocol (MCP)** enables the WebScraper agent to interact with external tools, databases, and services through a standardized interface. MCP servers expose **tools** that the agent can discover and use dynamically.
 
-### Why MCP?
+### why-mcp
 
 **Without MCP:**
 - Agent limited to built-in capabilities
@@ -24,13 +24,13 @@ The **Model Context Protocol (MCP)** enables the WebScraper agent to interact wi
 - Difficult to extend without code changes
 
 **With MCP:**
-- ✅ Dynamically discover and use 100+ community tools
-- ✅ Access databases (PostgreSQL, MongoDB, etc.)
-- ✅ Use specialized libraries (BeautifulSoup, Selenium, Playwright)
-- ✅ Integrate with external APIs (Google, GitHub, etc.)
-- ✅ Extend agent capabilities without code changes
+-  Dynamically discover and use 100+ community tools
+-  Access databases (PostgreSQL, MongoDB, etc.)
+-  Use specialized libraries (BeautifulSoup, Selenium, Playwright)
+-  Integrate with external APIs (Google, GitHub, etc.)
+-  Extend agent capabilities without code changes
 
-### Architecture
+### architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -61,11 +61,11 @@ The **Model Context Protocol (MCP)** enables the WebScraper agent to interact wi
 
 ---
 
-## Available MCP Servers
+## available-mcp-servers
 
-### 1. HTML Processing & Parsing
+### 1-html-processing-and-parsing
 
-#### **beautifulsoup-mcp**
+#### beautifulsoup-mcp
 Advanced HTML parsing and extraction.
 
 **Tools:**
@@ -115,7 +115,7 @@ action = Action(
 }
 ```
 
-#### **lxml-mcp**
+#### lxml-mcp
 Fast XML/HTML parsing with XPath support.
 
 **Tools:**
@@ -123,16 +123,16 @@ Fast XML/HTML parsing with XPath support.
 - `css_select(html: str, css: str)` → CSS selector (fast)
 - `validate_html(html: str)` → Check well-formedness
 
-#### **html5lib-mcp**
+#### html5lib-mcp
 Standards-compliant HTML5 parsing.
 
 **Tools:**
 - `parse_html5(html: str)` → Parse like a browser would
 - `sanitize_html(html: str, allowed_tags: List[str])` → Safe HTML cleaning
 
-### 2. Browser Automation
+### 2-browser-automation
 
-#### **playwright-mcp**
+#### playwright-mcp
 Full browser automation with JavaScript rendering.
 
 **Tools:**
@@ -168,17 +168,17 @@ Full browser automation with JavaScript rendering.
 }
 ```
 
-#### **puppeteer-mcp**
+#### puppeteer-mcp
 Lightweight browser automation (Chrome DevTools Protocol).
 
 Similar to Playwright but lighter weight.
 
-#### **selenium-mcp**
+#### selenium-mcp
 Legacy browser automation (more compatible, slower).
 
-### 3. Database Access
+### 3-database-access
 
-#### **postgresql-mcp**
+#### postgresql-mcp
 Access PostgreSQL databases.
 
 **Tools:**
@@ -188,7 +188,7 @@ Access PostgreSQL databases.
 
 **Use Case:** Store scraped data directly to production database.
 
-#### **mongodb-mcp**
+#### mongodb-mcp
 Access MongoDB collections.
 
 **Tools:**
@@ -196,7 +196,7 @@ Access MongoDB collections.
 - `insert(collection: str, document: dict)` → Insert document
 - `aggregate(collection: str, pipeline: List)` → Aggregation pipeline
 
-#### **redis-mcp**
+#### redis-mcp
 Fast cache and pub/sub.
 
 **Tools:**
@@ -206,9 +206,9 @@ Fast cache and pub/sub.
 
 **Use Case:** Cache parsed HTML, share state between agents.
 
-### 4. File System
+### 4-file-system
 
-#### **filesystem-mcp**
+#### filesystem-mcp
 Read/write local files.
 
 **Tools:**
@@ -219,9 +219,9 @@ Read/write local files.
 
 **Use Case:** Save scraped data to CSV/JSON, read configuration files.
 
-### 5. Search Engines
+### 5-search-engines
 
-#### **google-search-mcp**
+#### google-search-mcp
 Google Search API integration.
 
 **Tools:**
@@ -246,21 +246,21 @@ Google Search API integration.
 }
 ```
 
-#### **bing-search-mcp**
+#### bing-search-mcp
 Bing Search API.
 
-#### **brave-search-mcp**
+#### brave-search-mcp
 Privacy-focused search (Brave Search API).
 
-#### **duckduckgo-mcp**
+#### duckduckgo-mcp
 Free, no-API search.
 
 **Tools:**
 - `search(query: str, max_results: int = 10)` → DDG results
 
-### 6. Data Extraction
+### 6-data-extraction
 
-#### **readability-mcp**
+#### readability-mcp
 Extract main article content (removes ads, navigation, etc.).
 
 **Tools:**
@@ -268,14 +268,14 @@ Extract main article content (removes ads, navigation, etc.).
 
 **Use Case:** Extract blog posts, news articles, documentation.
 
-#### **trafilatura-mcp**
+#### trafilatura-mcp
 Advanced web scraping and text extraction.
 
 **Tools:**
 - `extract(url: str)` → Extract main content
 - `extract_metadata(html: str)` → Get title, author, date, etc.
 
-#### **newspaper-mcp**
+#### newspaper-mcp
 News article extraction and NLP.
 
 **Tools:**
@@ -283,9 +283,9 @@ News article extraction and NLP.
 - `extract_keywords(text: str)` → Keyword extraction
 - `summarize(text: str)` → Auto-summarization
 
-### 7. Data Validation
+### 7-data-validation
 
-#### **cerberus-mcp**
+#### cerberus-mcp
 Schema validation for extracted data.
 
 **Tools:**
@@ -306,12 +306,12 @@ if not result["valid"]:
     print("Validation errors:", result["errors"])
 ```
 
-#### **pydantic-mcp**
+#### pydantic-mcp
 Pydantic model validation.
 
-### 8. Computer Vision
+### 8-computer-vision
 
-#### **ocr-mcp**
+#### ocr-mcp
 Extract text from images (Tesseract OCR).
 
 **Tools:**
@@ -319,32 +319,32 @@ Extract text from images (Tesseract OCR).
 
 **Use Case:** Extract prices from product images, read captchas (if legal).
 
-#### **image-analysis-mcp**
+#### image-analysis-mcp
 Vision AI (GPT-4 Vision, Claude Vision).
 
 **Tools:**
 - `describe_image(image_path: str)` → Natural language description
 - `extract_structured(image_path: str, schema: dict)` → Extract structured data from images
 
-### 9. HTTP & Networking
+### 9-http-and-networking
 
-#### **requests-mcp**
+#### requests-mcp
 HTTP client with retry, session management.
 
 **Tools:**
 - `get(url: str, headers: dict = {})` → HTTP GET
 - `post(url: str, data: dict = {})` → HTTP POST
 
-#### **proxy-manager-mcp**
+#### proxy-manager-mcp
 Manage proxy rotation, IP reputation.
 
 **Tools:**
 - `get_proxy()` → Get next proxy from pool
 - `report_dead_proxy(proxy: str)` → Mark proxy as failed
 
-### 10. Utility
+### 10-utility
 
-#### **regex-mcp**
+#### regex-mcp
 Advanced regex operations.
 
 **Tools:**
@@ -352,14 +352,14 @@ Advanced regex operations.
 - `replace(pattern: str, replacement: str, text: str)` → Regex replace
 - `validate(pattern: str)` → Check if regex is valid
 
-#### **datetime-mcp**
+#### datetime-mcp
 Parse and normalize dates.
 
 **Tools:**
 - `parse_date(text: str)` → Parse natural language dates
 - `normalize_timezone(date: str, tz: str)` → Convert timezone
 
-#### **currency-mcp**
+#### currency-mcp
 Currency parsing and conversion.
 
 **Tools:**
@@ -368,11 +368,11 @@ Currency parsing and conversion.
 
 ---
 
-## Tool Registry & Discovery
+## tool-registry-and-discovery
 
 The **Tool Registry** automatically discovers all available tools from enabled MCP servers.
 
-### Architecture
+### architecture
 
 ```python
 class MCPToolRegistry:
@@ -421,7 +421,7 @@ class MCPToolRegistry:
         return [tool for tool, score in scored[:10]]
 ```
 
-### Tool Metadata
+### tool-metadata
 
 Each tool exposes rich metadata:
 
@@ -471,7 +471,7 @@ Tool(
 )
 ```
 
-### Auto Tool Discovery by Agent
+### auto-tool-discovery-by-agent
 
 The agent can query the registry to find relevant tools:
 
@@ -498,9 +498,9 @@ action = Action(
 
 ---
 
-## HTML Processing MCPs
+## html-processing-mcps
 
-### BeautifulSoup MCP (Detailed)
+### beautifulsoup-mcp-detailed
 
 **Installation:**
 ```bash
@@ -509,7 +509,7 @@ pip install mcp-beautifulsoup
 
 **Tools:**
 
-#### 1. `find_all(html, selector, limit=None)`
+#### 1-find-all-html-selector-limit-none
 Find all elements matching CSS selector.
 
 ```python
@@ -520,7 +520,7 @@ result = mcp.call("beautifulsoup.find_all", {
 # Returns: [{"text": "$10"}, {"text": "$20"}]
 ```
 
-#### 2. `find_one(html, selector)`
+#### 2-find-one-html-selector
 Find first matching element.
 
 ```python
@@ -531,7 +531,7 @@ result = mcp.call("beautifulsoup.find_one", {
 # Returns: {"text": "Widget Pro", "tag": "h1"}
 ```
 
-#### 3. `extract_tables(html)`
+#### 3-extract-tables-html
 Parse all `<table>` elements into structured data.
 
 ```python
@@ -548,7 +548,7 @@ result = mcp.call("beautifulsoup.extract_tables", {"html": obs.page_html})
 ]
 ```
 
-#### 4. `extract_links(html, base_url=None)`
+#### 4-extract-links-html-base-url-none
 Extract all links from page.
 
 ```python
@@ -563,7 +563,7 @@ result = mcp.call("beautifulsoup.extract_links", {
 ]
 ```
 
-#### 5. `clean_html(html, remove=['script', 'style', 'noscript'])`
+#### 5-clean-html-html-remove-script-style-noscript
 Remove unwanted elements.
 
 ```python
@@ -574,7 +574,7 @@ result = mcp.call("beautifulsoup.clean_html", {
 # Returns: Clean HTML without ads, scripts, navigation
 ```
 
-#### 6. `smart_extract(html, field_name)`
+#### 6-smart-extract-html-field-name
 Intelligent extraction based on field name.
 
 ```python
@@ -590,7 +590,7 @@ result = mcp.call("beautifulsoup.smart_extract", {
 # Returns: {"value": "$49.99", "confidence": 0.92, "selector": "span.product-price"}
 ```
 
-### Batch Processing for Long Content
+### batch-processing-for-long-content
 
 When HTML is too large (> 100KB), process in batches:
 
@@ -645,11 +645,11 @@ class HTMLBatchProcessor:
 
 ---
 
-## Lazy Loading System
+## lazy-loading-system
 
 MCP servers are **NOT downloaded by default**. They are installed on-demand when first used.
 
-### Download-on-Demand Flow
+### download-on-demand-flow
 
 ```
 Agent wants to use a tool
@@ -677,7 +677,7 @@ Skip    Download & Install
      Execute tool
 ```
 
-### Implementation
+### implementation
 
 ```python
 class LazyMCPLoader:
@@ -717,7 +717,7 @@ class LazyMCPLoader:
                 ], check=True)
             
             self.installed_servers.add(server_name)
-            logger.info(f"✓ Installed {server_name}")
+            logger.info(f" Installed {server_name}")
             return True
         
         except Exception as e:
@@ -731,7 +731,7 @@ class LazyMCPLoader:
         return self.show_download_dialog(server_name)
 ```
 
-### UI Dialog
+### ui-dialog
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -748,17 +748,17 @@ class LazyMCPLoader:
 │                                                           │
 │        [Download & Install]     [Skip]                   │
 │                                                           │
-│ ☑ Remember my choice for this server                     │
+│  Remember my choice for this server                     │
 └──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## MCP Composition
+## mcp-composition
 
 Combine multiple MCP tools to create powerful workflows.
 
-### Example 1: Parse HTML → Extract Tables → Save to Database
+### example-1-parse-html-extract-tables-save-to-database
 
 ```python
 # Step 1: Clean HTML
@@ -779,7 +779,7 @@ for table in tables:
     })
 ```
 
-### Example 2: Search Google → Navigate → Parse Article → Summarize
+### example-2-search-google-navigate-parse-article-summarize
 
 ```python
 # Step 1: Search
@@ -805,7 +805,7 @@ summary = mcp.call("llm.summarize", {
 })
 ```
 
-### Composition DSL
+### composition-dsl
 
 Define reusable workflows:
 
@@ -857,11 +857,11 @@ result = await extract_and_save.execute({
 
 ---
 
-## Testing Panel
+## testing-panel
 
 Test MCP tools manually before using them in agent workflows.
 
-### UI
+### ui
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -895,7 +895,7 @@ Test MCP tools manually before using them in agent workflows.
 │ │ ]                                                     │    │
 │ │                                                       │    │
 │ │ Execution time: 12ms                                  │    │
-│ │ Status: ✓ Success                                     │    │
+│ │ Status:  Success                                     │    │
 │ └──────────────────────────────────────────────────────┘    │
 │                                                              │
 │                       [Save as Example]                      │
@@ -904,9 +904,9 @@ Test MCP tools manually before using them in agent workflows.
 
 ---
 
-## Configuration
+## configuration
 
-### Full MCP Configuration Example
+### full-mcp-configuration-example
 
 ```json
 {
@@ -975,3 +975,27 @@ Test MCP tools manually before using them in agent workflows.
 ---
 
 **Next:** See [settings.md](./settings.md) for complete dashboard settings.
+
+
+## related-api-reference
+
+| item | value |
+| --- | --- |
+| api-reference | `api-reference.md` |
+
+## document-metadata
+
+| key | value |
+| --- | --- |
+| document | `mcp.md` |
+| status | active |
+
+## document-flow
+
+```mermaid
+flowchart TD
+    A[document] --> B[key-sections]
+    B --> C[implementation]
+    B --> D[operations]
+    B --> E[validation]
+```
