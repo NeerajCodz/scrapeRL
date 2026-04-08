@@ -311,19 +311,42 @@ class SmartModelRouter:
         return models
 
     def get_provider_for_model(self, model: str) -> BaseProvider | None:
-        """Get the provider for a specific model."""
+        """Get the provider for a specific model.
+        
+        Supports both formats:
+        - "gemini-1.5-flash" (bare model name)
+        - "google/gemini-1.5-flash" (provider/model format)
+        """
+        # Strip provider prefix if present (e.g., "google/gemini-1.5-flash" -> "gemini-1.5-flash")
+        model_name = model
+        if "/" in model:
+            provider_prefix, model_name = model.split("/", 1)
+            # Try to match provider directly first
+            if provider_prefix in self.providers:
+                provider = self.providers[provider_prefix]
+                try:
+                    if provider.get_model_info(model_name):
+                        return provider
+                except Exception:
+                    pass
+                # Check aliases
+                if hasattr(provider, "MODEL_ALIASES"):
+                    if model_name in provider.MODEL_ALIASES:  # type: ignore
+                        return provider
+                
+        # Fallback: try all providers with both original and stripped names
         for provider in self.providers.values():
-            try:
-                if provider.get_model_info(model):
-                    return provider
-            except Exception:
-                # Model not found in this provider, continue to next
-                pass
+            for name in [model, model_name]:
+                try:
+                    if provider.get_model_info(name):
+                        return provider
+                except Exception:
+                    pass
 
-            # Check aliases for Anthropic and Google
-            if hasattr(provider, "MODEL_ALIASES"):
-                if model in provider.MODEL_ALIASES:  # type: ignore
-                    return provider
+                # Check aliases
+                if hasattr(provider, "MODEL_ALIASES"):
+                    if name in provider.MODEL_ALIASES:  # type: ignore
+                        return provider
 
         return None
 
@@ -522,8 +545,10 @@ class SmartModelRouter:
 
         for i, (model_id, provider) in enumerate(models_to_try):
             try:
-                logger.info(f"Attempting completion with {provider.PROVIDER_NAME}/{model_id}")
-                response = await provider.complete(messages, model_id, **kwargs)
+                # Strip provider prefix if present (e.g., "google/gemini-1.5-flash" -> "gemini-1.5-flash")
+                model_name = model_id.split("/", 1)[1] if "/" in model_id else model_id
+                logger.info(f"Attempting completion with {provider.PROVIDER_NAME}/{model_name}")
+                response = await provider.complete(messages, model_name, **kwargs)
 
                 # Track cost
                 self.cost_tracker.track(response)
