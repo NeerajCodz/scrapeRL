@@ -59,12 +59,13 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 ENV_API_BASE_URL = _env_str("ENV_API_BASE_URL", "http://localhost:8000/api")
 TASK_NAME_DEFAULT = _env_str("TASK_NAME", "task_001")
 BENCHMARK_DEFAULT = _env_str("BENCHMARK", "openenv")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 MAX_STEPS_DEFAULT = _env_int("MAX_STEPS", 12)
 EPISODE_SEED_DEFAULT = _env_int("EPISODE_SEED", 42)
 LLM_TEMPERATURE = _env_float("LLM_TEMPERATURE", 0.0)
 PROMPT_HTML_LIMIT = _env_int("PROMPT_HTML_LIMIT", 5000)
 REQUEST_TIMEOUT_SECONDS = _env_float("REQUEST_TIMEOUT_SECONDS", 30.0)
-USE_OPENENV_SDK = _env_bool("USE_OPENENV_SDK", True)
+USE_OPENENV_SDK = _env_bool("USE_OPENENV_SDK", False)
 
 
 @dataclass
@@ -125,9 +126,20 @@ def _emit_step(step_number: int, action: str, reward: float, done: bool, error_v
     )
 
 
-def _emit_end(success: bool, steps: int, rewards: list[float]) -> None:
+def _emit_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     rewards_text = ",".join(_reward_text(reward) for reward in rewards)
-    print(f"[END] success={_bool_text(success)} steps={steps} rewards={rewards_text}", flush=True)
+    print(
+        f"[END] success={_bool_text(success)} steps={steps} score={_reward_text(score)} rewards={rewards_text}",
+        flush=True,
+    )
+
+
+def _compute_score(success: bool, rewards: list[float]) -> float:
+    if success:
+        return 1.0
+    if not rewards:
+        return 0.0
+    return max(0.0, min(1.0, max(float(value) for value in rewards)))
 
 
 def _action_to_log_string(action: dict[str, Any]) -> str:
@@ -482,7 +494,31 @@ class OpenEnvSDKAdapter:
         raise RuntimeError("Unsupported step() return format from OpenEnv SDK")
 
 
-def _build_adapter(benchmark: str, env_api_base_url: str) -> EpisodeAdapter:
+class OpenEnvDockerImageAdapter:
+    def __init__(self, image_name: str) -> None:
+        import openenv  # type: ignore
+
+        if not hasattr(openenv, "from_docker_image"):
+            raise RuntimeError("openenv.from_docker_image is not available")
+        self.env = openenv.from_docker_image(image_name)
+
+    def reset(self, task_name: str, seed: int) -> tuple[dict[str, Any], dict[str, Any]]:
+        return OpenEnvSDKAdapter._parse_reset(self.env.reset(task_name=task_name, seed=seed))
+
+    def step(self, action: dict[str, Any]) -> StepOutcome:
+        return OpenEnvSDKAdapter._parse_step(self.env.step(action))
+
+    def close(self) -> None:
+        if hasattr(self.env, "close"):
+            self.env.close()
+
+
+def _build_adapter(benchmark: str, env_api_base_url: str, local_image_name: str | None) -> EpisodeAdapter:
+    if isinstance(local_image_name, str) and local_image_name.strip():
+        try:
+            return OpenEnvDockerImageAdapter(local_image_name.strip())
+        except Exception:
+            pass
     if USE_OPENENV_SDK:
         try:
             return OpenEnvSDKAdapter(benchmark)
@@ -491,7 +527,14 @@ def _build_adapter(benchmark: str, env_api_base_url: str) -> EpisodeAdapter:
     return ScrapeRLEpisodeAdapter(env_api_base_url)
 
 
-def run_inference(task_name: str, benchmark: str, max_steps: int, seed: int, env_api_base_url: str) -> int:
+def run_inference(
+    task_name: str,
+    benchmark: str,
+    max_steps: int,
+    seed: int,
+    env_api_base_url: str,
+    local_image_name: str | None,
+) -> int:
     rewards: list[float] = []
     steps = 0
     success = False
@@ -506,7 +549,11 @@ def run_inference(task_name: str, benchmark: str, max_steps: int, seed: int, env
         from openai import OpenAI
 
         client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
-        adapter = _build_adapter(benchmark=benchmark, env_api_base_url=env_api_base_url)
+        adapter = _build_adapter(
+            benchmark=benchmark,
+            env_api_base_url=env_api_base_url,
+            local_image_name=local_image_name,
+        )
         observation, info = adapter.reset(task_name=task_name, seed=seed)
 
         for step_number in range(1, max_steps + 1):
@@ -547,7 +594,7 @@ def run_inference(task_name: str, benchmark: str, max_steps: int, seed: int, env
                 adapter.close()
             except Exception:
                 pass
-        _emit_end(success=success, steps=steps, rewards=rewards)
+        _emit_end(success=success, steps=steps, score=_compute_score(success, rewards), rewards=rewards)
 
     return 0 if success else 1
 
@@ -563,6 +610,11 @@ def parse_args() -> argparse.Namespace:
         default=ENV_API_BASE_URL,
         help="Fallback environment API base URL (used when OpenEnv SDK is unavailable)",
     )
+    parser.add_argument(
+        "--local-image-name",
+        default=LOCAL_IMAGE_NAME,
+        help="Docker image name for OpenEnv from_docker_image bridge (optional)",
+    )
     return parser.parse_args()
 
 
@@ -575,10 +627,11 @@ if __name__ == "__main__":
             max_steps=args.max_steps,
             seed=args.seed,
             env_api_base_url=args.env_api_base_url,
+            local_image_name=args.local_image_name,
         )
     except Exception:
         # Last-resort guard: never allow an unhandled exception to escape.
         _emit_start(task_name=TASK_NAME_DEFAULT, benchmark=BENCHMARK_DEFAULT, model_name=MODEL_NAME)
-        _emit_end(success=False, steps=0, rewards=[])
+        _emit_end(success=False, steps=0, score=0.0, rewards=[])
         exit_code = 1
     sys.exit(exit_code)
