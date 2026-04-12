@@ -10,24 +10,61 @@ from typing import Any, Protocol
 from urllib import error as url_error
 from urllib import request as url_request
 
-from openai import OpenAI
+def _env_str(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    cleaned = value.strip()
+    return cleaned if cleaned else default
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value.strip())
+    except Exception:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value.strip())
+    except Exception:
+        return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    cleaned = value.strip().lower()
+    if cleaned in {"1", "true", "yes", "on"}:
+        return True
+    if cleaned in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 # Required hackathon configuration variables
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
+API_BASE_URL = _env_str("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = _env_str("MODEL_NAME", "gpt-4.1-mini")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Optional runtime variables for local/OpenEnv execution
-ENV_API_BASE_URL = os.getenv("ENV_API_BASE_URL", "http://localhost:8000/api")
-TASK_NAME_DEFAULT = os.getenv("TASK_NAME", "task_001")
-BENCHMARK_DEFAULT = os.getenv("BENCHMARK", "openenv")
-MAX_STEPS_DEFAULT = int(os.getenv("MAX_STEPS", "12"))
-EPISODE_SEED_DEFAULT = int(os.getenv("EPISODE_SEED", "42"))
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.0"))
-PROMPT_HTML_LIMIT = int(os.getenv("PROMPT_HTML_LIMIT", "5000"))
-REQUEST_TIMEOUT_SECONDS = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "30"))
-USE_OPENENV_SDK = os.getenv("USE_OPENENV_SDK", "true").lower() in {"1", "true", "yes", "on"}
+ENV_API_BASE_URL = _env_str("ENV_API_BASE_URL", "http://localhost:8000/api")
+TASK_NAME_DEFAULT = _env_str("TASK_NAME", "task_001")
+BENCHMARK_DEFAULT = _env_str("BENCHMARK", "openenv")
+MAX_STEPS_DEFAULT = _env_int("MAX_STEPS", 12)
+EPISODE_SEED_DEFAULT = _env_int("EPISODE_SEED", 42)
+LLM_TEMPERATURE = _env_float("LLM_TEMPERATURE", 0.0)
+PROMPT_HTML_LIMIT = _env_int("PROMPT_HTML_LIMIT", 5000)
+REQUEST_TIMEOUT_SECONDS = _env_float("REQUEST_TIMEOUT_SECONDS", 30.0)
+USE_OPENENV_SDK = _env_bool("USE_OPENENV_SDK", True)
 
 
 @dataclass
@@ -243,7 +280,7 @@ def _build_llm_prompt(
 
 
 def _llm_next_action(
-    client: OpenAI,
+    client: Any,
     task_name: str,
     benchmark: str,
     observation: dict[str, Any],
@@ -466,6 +503,8 @@ def run_inference(task_name: str, benchmark: str, max_steps: int, seed: int, env
         if HF_TOKEN is None:
             raise ValueError("HF_TOKEN environment variable is required")
 
+        from openai import OpenAI
+
         client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
         adapter = _build_adapter(benchmark=benchmark, env_api_base_url=env_api_base_url)
         observation, info = adapter.reset(task_name=task_name, seed=seed)
@@ -528,12 +567,18 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    exit_code = run_inference(
-        task_name=args.task,
-        benchmark=args.benchmark,
-        max_steps=args.max_steps,
-        seed=args.seed,
-        env_api_base_url=args.env_api_base_url,
-    )
+    try:
+        args = parse_args()
+        exit_code = run_inference(
+            task_name=args.task,
+            benchmark=args.benchmark,
+            max_steps=args.max_steps,
+            seed=args.seed,
+            env_api_base_url=args.env_api_base_url,
+        )
+    except Exception:
+        # Last-resort guard: never allow an unhandled exception to escape.
+        _emit_start(task_name=TASK_NAME_DEFAULT, benchmark=BENCHMARK_DEFAULT, model_name=MODEL_NAME)
+        _emit_end(success=False, steps=0, rewards=[])
+        exit_code = 1
     sys.exit(exit_code)
